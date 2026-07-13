@@ -75,9 +75,31 @@ ARCHIVOS_FUENTE = {
     "TikTok": "tiktok.csv",
 }
 
-# Consulta por defecto si el usuario no especifica en el CSV de dónde salió el
-# registro (mantiene la trazabilidad mínima).
+# Consulta por defecto si el usuario no especifica de dónde salió el registro
+# (mantiene la trazabilidad mínima).
 CONSULTA_POR_DEFECTO = "recoleccion_manual"
+
+# ---------------------------------------------------------------------------
+# 3.b) SCRAPING CON SELENIUM (navegador real)
+# ---------------------------------------------------------------------------
+# Carpeta base de perfiles de Chrome. Cada red usa un subperfil propio para
+# poder correr varios navegadores EN PARALELO sin conflicto y conservar la
+# sesión iniciada entre corridas (login manual la primera vez).
+PERFIL_NAVEGADOR = ".perfil_navegador"
+
+# Ejecutar sin ventana. Por defecto False: las redes detectan el modo headless,
+# y además se necesita ver el navegador para el login manual. Se puede forzar
+# con la variable de entorno HEADLESS=1 (útil sólo para pruebas).
+HEADLESS = False
+
+# Nº de desplazamientos (scroll) por cada consulta para cargar más resultados.
+SCROLLS_POR_CONSULTA = 6
+
+# Pausa (segundos) tras cada scroll para que carguen los resultados.
+PAUSA_SCROLL = 2.5
+
+# Espera máxima (segundos) a que aparezcan elementos en la página.
+ESPERA_MAX = 20
 
 # ---------------------------------------------------------------------------
 # 4) SALIDA

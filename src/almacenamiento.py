@@ -1,16 +1,16 @@
 """
-Almacenamiento con TRAZABILIDAD (rúbrica: "Almacenamiento correcto").
+Almacenamiento en JSON con TRAZABILIDAD (rúbrica: "Almacenamiento correcto").
 
-Persiste el dataset en dos formatos complementarios:
-  - JSON: estructura completa, ideal para reprocesar en el proyecto final.
-  - CSV : tabular, ideal para inspección rápida y herramientas de análisis.
+Genera:
+  - Un dataset COMBINADO `datos/dataset_<fecha>.json` con metadatos del estudio
+    (contexto, problemática, objetivo) y todos los registros.
+  - Un archivo POR RED `datos/<red>_<fecha>.json` para inspección individual.
 
 Cada registro conserva: fuente, consulta, texto, autor, fecha, url y métricas.
 """
 
 from __future__ import annotations
 
-import csv
 import json
 import os
 from datetime import datetime
@@ -19,21 +19,14 @@ from . import config
 from .modelos import Registro
 from .utilidades import log
 
-# Columnas del CSV. Las métricas se serializan como JSON en una sola columna
-# para no perder información variable entre fuentes.
-COLUMNAS_CSV = [
-    "id_unico", "fuente", "consulta", "texto", "autor",
-    "fecha_publicacion", "url", "idioma", "metricas", "extraido_en",
-]
-
 
 def _asegurar_dir(ruta: str) -> None:
     os.makedirs(ruta, exist_ok=True)
 
 
 def deduplicar(registros: list[Registro]) -> list[Registro]:
-    """Elimina duplicados por id_unico (una misma opinión puede aparecer en
-    varias consultas)."""
+    """Elimina duplicados por id_unico (una opinión puede salir en varias
+    consultas)."""
     vistos: set[str] = set()
     unicos: list[Registro] = []
     for r in registros:
@@ -44,46 +37,64 @@ def deduplicar(registros: list[Registro]) -> list[Registro]:
     return unicos
 
 
-def guardar(registros: list[Registro], etiqueta: str = "") -> dict:
-    """
-    Guarda los registros en JSON y CSV con marca de tiempo.
-    Devuelve un resumen con las rutas y el conteo.
-    """
-    _asegurar_dir(config.DIR_DATOS)
-    marca = datetime.now().strftime("%Y%m%d_%H%M%S")
-    sufijo = f"_{etiqueta}" if etiqueta else ""
-    base = os.path.join(config.DIR_DATOS, f"dataset{sufijo}_{marca}")
-
-    ruta_json = f"{base}.json"
-    ruta_csv = f"{base}.csv"
-
-    dicts = [r.como_dict() for r in registros]
-
-    # --- JSON ---
-    with open(ruta_json, "w", encoding="utf-8") as f:
-        json.dump({
-            "problematica": config.PROBLEMATICA,
-            "generado_en": datetime.now().isoformat(),
-            "total_registros": len(dicts),
-            "registros": dicts,
-        }, f, ensure_ascii=False, indent=2)
-
-    # --- CSV ---
-    with open(ruta_csv, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=COLUMNAS_CSV, extrasaction="ignore")
-        writer.writeheader()
-        for d in dicts:
-            fila = dict(d)
-            fila["metricas"] = json.dumps(d.get("metricas", {}), ensure_ascii=False)
-            writer.writerow(fila)
-
-    log.info("Dataset guardado: %s (%d registros)", ruta_json, len(dicts))
-    log.info("Dataset guardado: %s", ruta_csv)
-    return {"json": ruta_json, "csv": ruta_csv, "total": len(dicts)}
-
-
 def resumen_por_fuente(registros: list[Registro]) -> dict[str, int]:
     conteo: dict[str, int] = {}
     for r in registros:
         conteo[r.fuente] = conteo.get(r.fuente, 0) + 1
     return conteo
+
+
+def _escribir_json(ruta: str, contenido: dict) -> None:
+    with open(ruta, "w", encoding="utf-8") as f:
+        json.dump(contenido, f, ensure_ascii=False, indent=2)
+
+
+def _nombre_seguro(texto: str) -> str:
+    return "".join(c if c.isalnum() else "_" for c in texto).strip("_").lower()
+
+
+def guardar(registros: list[Registro]) -> dict:
+    """
+    Guarda el dataset combinado y un archivo JSON por red.
+    Devuelve un resumen con rutas y conteos.
+    """
+    _asegurar_dir(config.DIR_DATOS)
+    marca = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    dicts = [r.como_dict() for r in registros]
+    conteo = resumen_por_fuente(registros)
+
+    # --- Dataset combinado ---
+    ruta_combinado = os.path.join(config.DIR_DATOS, f"dataset_{marca}.json")
+    _escribir_json(ruta_combinado, {
+        "contexto": config.CONTEXTO,
+        "problematica": config.PROBLEMATICA,
+        "objetivo": config.OBJETIVO,
+        "generado_en": datetime.now().isoformat(),
+        "total_registros": len(dicts),
+        "registros_por_fuente": conteo,
+        "registros": dicts,
+    })
+    log.info("Dataset combinado: %s (%d registros)", ruta_combinado, len(dicts))
+
+    # --- Un JSON por red ---
+    archivos_fuente: dict[str, str] = {}
+    for fuente in conteo:
+        registros_fuente = [d for d in dicts if d["fuente"] == fuente]
+        ruta = os.path.join(config.DIR_DATOS,
+                            f"{_nombre_seguro(fuente)}_{marca}.json")
+        _escribir_json(ruta, {
+            "fuente": fuente,
+            "problematica": config.PROBLEMATICA,
+            "generado_en": datetime.now().isoformat(),
+            "total_registros": len(registros_fuente),
+            "registros": registros_fuente,
+        })
+        archivos_fuente[fuente] = ruta
+        log.info("  -> %s (%d registros)", ruta, len(registros_fuente))
+
+    return {
+        "combinado": ruta_combinado,
+        "por_fuente": archivos_fuente,
+        "total": len(dicts),
+    }

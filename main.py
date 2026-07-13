@@ -95,8 +95,9 @@ def main():
     print("Registros por fuente :")
     for fuente, n in sorted(conteo.items()):
         print(f"    {fuente:<12}: {n}")
-    print(f"\nDataset JSON: {info['json']}")
-    print(f"Dataset CSV : {info['csv']}")
+    print(f"\nDataset combinado (JSON): {info['combinado']}")
+    for fuente, ruta in sorted(info["por_fuente"].items()):
+        print(f"  {fuente:<12}: {ruta}")
 
     lineas_evidencia += [
         f"Registros brutos: {total_bruto}",
@@ -104,8 +105,9 @@ def main():
         "Registros por fuente:",
     ]
     lineas_evidencia += [f"    {f}: {n}" for f, n in sorted(conteo.items())]
-    lineas_evidencia += ["", f"Dataset JSON: {info['json']}",
-                         f"Dataset CSV : {info['csv']}", ""]
+    lineas_evidencia += ["", f"Dataset combinado (JSON): {info['combinado']}"]
+    lineas_evidencia += [f"  {f}: {r}" for f, r in sorted(info["por_fuente"].items())]
+    lineas_evidencia += [""]
 
     if t_secuencial is not None and t_paralelo is not None:
         speedup = t_secuencial / t_paralelo if t_paralelo else 0

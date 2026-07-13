@@ -65,13 +65,30 @@ viable por las defensas anti-bot de cada plataforma:
 | Facebook | `facebook-scraper` | Devuelve 0 publicaciones incluso con cookies de sesión válidas (Facebook cambió/bloqueó `m.facebook.com`). |
 | TikTok | `TikTokApi` (Playwright) | Detección de bot en modo headless (`empty response... detecting you're a bot`). |
 
-**Fase 2 — Estrategia adoptada: recolección manual + procesamiento paralelo.**
-Las opiniones reales se recolectan manualmente (usando las palabras clave y
-hashtags de la §_estrategia de búsqueda_) y se vuelcan a un CSV por red en
-[`datos_manuales/`](datos_manuales/). El sistema entonces **lee, limpia,
-normaliza, deduplica y almacena las tres fuentes EN PARALELO**. Así el requisito
-de paralelismo se cumple sobre datos reales y verificables, sin depender de APIs
-de pago ni de scraping bloqueado.
+**Fase 2 — Estrategia adoptada: scraping con Selenium (navegador real).** En
+lugar de librerías que imitan el tráfico (fácilmente detectables), se automatiza
+**Google Chrome real** con Selenium sobre una **sesión iniciada por el usuario**.
+Esto sortea gran parte de la detección anti-bot porque las peticiones salen de un
+navegador legítimo con cookies válidas. Detalles:
+
+- **Perfil persistente por red** (`.perfil_navegador/<red>`, ver
+  [`src/navegador.py`](src/navegador.py)): el login manual se hace **una sola
+  vez** con `preparar_sesion.py` y la sesión se reutiliza en cada corrida.
+- **Ajustes stealth**: se desactivan las banderas de automatización y se oculta
+  `navigator.webdriver`.
+- Cada red tiene un subperfil propio, por lo que los navegadores pueden correr
+  **en paralelo** sin conflicto.
+
+Estado de implementación (se construye **una red a la vez**):
+
+| Red | Mecanismo | Estado |
+|-----|-----------|--------|
+| **X (Twitter)** | Selenium (`src/extractores/twitter_x.py`) | ✅ Implementado |
+| **Facebook** | Selenium | 🚧 En construcción (fallback CSV en `datos_manuales/`) |
+| **TikTok** | Selenium | 🚧 En construcción (fallback CSV en `datos_manuales/`) |
+
+> La Fase 1 (librerías `twikit`/`facebook-scraper`/`TikTokApi`) quedó documentada
+> arriba como justificación de por qué se pasó a Selenium.
 
 ### Estrategia de búsqueda (centralizada en [`src/config.py`](src/config.py))
 - **Palabras clave:** `Ecos del Sol museo`, `nuevo Museo Nacional del Ecuador`…
@@ -95,8 +112,8 @@ de pago ni de scraping bloqueado.
              (hilo 1)    │   (hilo 2)   │   (hilo 3)   │
                   ┌──────▼───┐   ┌──────▼───┐   ┌──────▼───┐
                   │ X/Twitter│   │ Facebook │   │  TikTok  │   ← PRODUCTORES
-                  │  .csv    │   │   .csv   │   │   .csv   │     (leen+normalizan)
-                  └──────┬───┘   └──────┬───┘   └──────┬───┘
+                  │ Selenium │   │ Selenium │   │ Selenium │     (scrapean+
+                  └──────┬───┘   └──────┬───┘   └──────┬───┘      normalizan)
                          └───────┬──────┴──────────────┘
                                  ▼
                           queue.Queue          ← canal común
@@ -105,7 +122,7 @@ de pago ni de scraping bloqueado.
                                  ▼
                     Registro normalizado (src/modelos)
                                  ▼
-               Almacenamiento JSON + CSV (src/almacenamiento)
+               Almacenamiento JSON (src/almacenamiento)
 ```
 
 La abstracción **`ExtractorBase`** hace que cada red devuelva `Registro`
@@ -121,8 +138,8 @@ Núcleo en [`src/controlador.py`](src/controlador.py). Las tres redes se procesa
 **al mismo tiempo**:
 
 1. **Pool de hilos** (`concurrent.futures.ThreadPoolExecutor`): un hilo por red,
-   cada uno **productor** que lee su CSV, limpia y normaliza los textos y empuja
-   los `Registro` a una cola.
+   cada uno **productor** que scrapea su red (navegador Selenium propio), limpia
+   y normaliza los textos y empuja los `Registro` a una cola.
 2. **Cola segura** (`queue.Queue`): canal thread-safe entre los extractores y un
    **consumidor** central (patrón **Productor/Consumidor**).
 3. **Aislamiento de fallos** (`extraer_seguro`): un error en una red no detiene
@@ -137,48 +154,52 @@ arrancan concurrentemente (`Extractor_0`, `Extractor_1`…).
 
 **Se eligieron HILOS (threads), no procesos.**
 
-El trabajo de cada fuente es **I/O-bound** (lectura de archivos) con un poco de
-CPU ligera (limpieza de HTML/entidades y normalización). En ese perfil:
+El trabajo de cada fuente es **I/O-bound**: dominado por la **espera de red** del
+navegador (cargar la página de búsqueda, esperar resultados, hacer scroll). En
+ese perfil:
 
-- Con **hilos**, las operaciones de E/S se **solapan** (mientras un hilo lee su
-  archivo, otro avanza) y comparten memoria, ideal para volcar todo a una cola
-  común. Los hilos son livianos y suficientes.
+- Con **hilos**, mientras el navegador de una red espera la red, Python
+  **libera el GIL** y el hilo de otra red avanza: las esperas se **solapan** y el
+  tiempo total tiende al de la red más lenta, no a la suma. Además comparten
+  memoria, ideal para volcar todo a una cola común.
 - Con **procesos** pagaríamos creación de procesos y **serialización** de datos
-  sin beneficio, porque no hay cómputo pesado (los procesos convienen en tareas
-  *CPU-bound*).
+  sin beneficio, porque el cuello de botella es la red, no la CPU (los procesos
+  convienen en tareas *CPU-bound*).
 
 Se añaden **colas** porque la consigna pide comunicar los datos entre los
 extractores y un controlador central; `queue.Queue` es la estructura segura para
 hilos que lo resuelve. El **pool** administra el ciclo de vida de los hilos.
 
-> **Nota honesta sobre el `--benchmark`.** El *speedup* real se aprecia cuando
-> hay volumen de datos que leer/procesar; con pocos registros los tiempos son de
-> milisegundos y la medición es ruido. El valor demostrado aquí es la
-> **arquitectura concurrente** (pool + cola + productor/consumidor), no un número
-> de aceleración. La misma arquitectura fue la que, en la versión con APIs
-> reales, dio speedups de ~3x (solapando esperas de red).
+Con `python main.py --benchmark` se mide el *speedup* (tiempo secuencial ÷
+paralelo): al solapar las esperas de red de los tres navegadores, la corrida
+paralela es notablemente más rápida que hacerlas una tras otra.
 
 ---
 
-## 7. Recolección de los datos (paso obligatorio)
+## 7. Preparar la sesión (paso obligatorio la primera vez)
 
-Llena los tres archivos de [`datos_manuales/`](datos_manuales/) con opiniones
-reales (guía completa en [`datos_manuales/COMO_LLENAR.md`](datos_manuales/COMO_LLENAR.md)):
+Los scrapers usan tu sesión iniciada. Antes de la primera corrida, inicia sesión
+manualmente en cada red (se guarda en el perfil y se reutiliza):
 
-- `facebook.csv`, `x_twitter.csv`, `tiktok.csv`
-- Columna obligatoria: **`texto`**. Opcionales (suman trazabilidad):
-  `consulta`, `autor`, `fecha`, `url`, `likes`, `comentarios`, `compartidos`, `vistas`.
-- Recomendado: llenarlos con **LibreOffice/Excel/Sheets** y exportar como CSV
-  UTF-8 (maneja solo las comas y comillas del texto).
-- Incluye opiniones **a favor y en contra** para un análisis representativo.
+```bash
+python3 preparar_sesion.py x          # abre Chrome, inicia sesión en X, ENTER
+# (más adelante: preparar_sesion.py facebook / tiktok)
+```
+
+La sesión queda almacenada en `.perfil_navegador/<red>` (no versionado). No se
+guardan usuarios ni contraseñas en el proyecto: sólo las cookies del navegador.
+
+> ⚠️ Automatizar una cuenta puede infringir los Términos de Servicio de la red.
+> Úsese con fines académicos y, de preferencia, con una cuenta secundaria.
 
 ---
 
 ## 8. Almacenamiento y trazabilidad _(rúbrica: 0.5)_
 
-[`src/almacenamiento.py`](src/almacenamiento.py) guarda el dataset en **JSON y
-CSV** con marca de tiempo en [`datos/`](datos/). Cada `Registro`
-([`src/modelos.py`](src/modelos.py)) conserva:
+[`src/almacenamiento.py`](src/almacenamiento.py) guarda los resultados en
+**JSON** con marca de tiempo en [`datos/`](datos/): un **dataset combinado**
+(`dataset_<fecha>.json`) y **un archivo por red** (`x_twitter_<fecha>.json`, …).
+Cada `Registro` ([`src/modelos.py`](src/modelos.py)) conserva:
 
 | Campo | Descripción |
 |-------|-------------|
@@ -195,7 +216,7 @@ Se **deduplica** por `id_unico`.
 
 ## 9. Evidencia de ejecución y dataset _(rúbrica: 0.4)_
 
-- Dataset generado: carpeta [`datos/`](datos/) (`.json` y `.csv`).
+- Dataset generado: carpeta [`datos/`](datos/) (JSON combinado + JSON por red).
 - Log de cada corrida: carpeta [`evidencias/`](evidencias/) (muestra los tres
   hilos iniciando concurrentemente).
 
@@ -213,32 +234,43 @@ habilita el análisis temporal de la controversia y el *storytelling* final.
 
 ## Cómo ejecutar
 
-Requiere **solo Python 3.9+** (sin dependencias que instalar):
+Requiere **Python 3.9+**, **Google Chrome** y Selenium.
 
 ```bash
-# 1) Llena datos_manuales/*.csv con opiniones reales (ver §7)
-# 2) Ejecuta:
-python3 main.py               # carga paralela + guardado del dataset
-python3 main.py --benchmark   # además compara secuencial vs paralelo
+# 1) Entorno e instalación
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2) Iniciar sesión en la red (una vez; ver §7)
+python3 preparar_sesion.py x
+
+# 3) Ejecutar la extracción paralela
+python3 main.py               # scraping paralelo + guardado del dataset JSON
+python3 main.py --benchmark   # además compara secuencial vs paralelo (speedup)
 python3 main.py --secuencial  # sólo modo secuencial (referencia)
 ```
+
+> Para pruebas sin ventana: `HEADLESS=1 python3 main.py` (las redes detectan el
+> modo headless, úsalo sólo para depurar).
 
 ## Estructura del proyecto
 
 ```
 main.py                     # punto de entrada (CLI)
-datos_manuales/             # CSV a llenar con datos reales (uno por red)
-  facebook.csv  x_twitter.csv  tiktok.csv  COMO_LLENAR.md
+preparar_sesion.py          # login manual por red (guarda sesión en el perfil)
 src/
-  config.py                 # contexto, problemática, estrategia, fuentes
+  navegador.py              # fábrica de Chrome+Selenium (perfil persistente, stealth)
+  config.py                 # contexto, problemática, estrategia, parámetros Selenium
   modelos.py                # Registro (modelo unificado + trazabilidad)
-  carga_manual.py           # lectura+normalización de los CSV
+  carga_manual.py           # fallback: lectura+normalización de CSV (FB/TikTok, transitorio)
   utilidades.py             # limpieza de texto, logging
   controlador.py            # núcleo PARALELO: pool de hilos + cola
-  almacenamiento.py         # guardado JSON/CSV + deduplicación
+  almacenamiento.py         # guardado JSON (combinado + por red) + deduplicación
   extractores/
     base.py                 # ExtractorBase (contrato común)
-    twitter_x.py  facebook.py  tiktok.py
-datos/                      # datasets generados (JSON + CSV)
+    twitter_x.py            # scraper Selenium de X (implementado)
+    facebook.py  tiktok.py  # fallback CSV (migración a Selenium en curso)
+datos_manuales/             # CSV de respaldo mientras FB/TikTok migran a Selenium
+datos/                      # datasets generados (JSON)
 evidencias/                 # logs de cada ejecución
 ```
