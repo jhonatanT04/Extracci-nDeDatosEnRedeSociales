@@ -1,0 +1,8 @@
+# El pipeline paralelo usa EXCLUSIVAMENTE la librería estándar de Python 3.9+
+# (csv, json, threading, queue, concurrent.futures). No requiere instalar nada:
+#     python3 main.py --benchmark
+#
+# Nota: durante el desarrollo se probaron librerías de scraping para las tres
+# redes (twikit, facebook-scraper, TikTokApi), pero fueron bloqueadas por las
+# defensas anti-bot de las plataformas; ver la sección "Estrategia de
+# extracción" del README. La solución final no depende de ellas.

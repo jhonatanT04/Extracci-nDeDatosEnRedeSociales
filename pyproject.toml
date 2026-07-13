@@ -1,0 +1,7 @@
+[project]
+name = "extraccion-datos-redes-sociales"
+version = "1.0.0"
+description = "Extracción paralela de opiniones en redes sociales sobre el diseño 'Ecos del Sol' del nuevo Museo Nacional del Ecuador (práctica de Computación Paralela, UPS)."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
