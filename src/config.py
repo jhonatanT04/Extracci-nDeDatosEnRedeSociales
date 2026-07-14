@@ -8,11 +8,11 @@ originó.
 
 Modelo de extracción
 --------------------
-Facebook, X (Twitter) y TikTok bloquean el scraping automático gratuito (ver la
-sección "Estrategia de extracción" del README). Por eso la recolección de las
-publicaciones/comentarios reales se hace de forma MANUAL y se vuelca a un
-archivo CSV por cada red (carpeta `datos_manuales/`). El sistema LEE, LIMPIA,
-NORMALIZA y ALMACENA esos datos de las tres redes EN PARALELO.
+Facebook, X (Twitter) y TikTok bloquean las APIs/librerías de scraping
+gratuitas (ver la sección "Estrategia de extracción" del README). Por eso las
+tres redes se scrapean con SELENIUM sobre Google Chrome real y una sesión
+iniciada por el usuario (`preparar_sesion.py <red>`). El controlador ejecuta
+los tres scrapers EN PARALELO (un navegador por red).
 """
 
 from __future__ import annotations
@@ -65,22 +65,7 @@ HASHTAGS = [
 ]
 
 # ---------------------------------------------------------------------------
-# 3) FUENTES: una red -> un archivo CSV de recolección manual
-# ---------------------------------------------------------------------------
-DIR_MANUAL = "datos_manuales"
-
-ARCHIVOS_FUENTE = {
-    "Facebook": "facebook.csv",
-    "X-Twitter": "x_twitter.csv",
-    "TikTok": "tiktok.csv",
-}
-
-# Consulta por defecto si el usuario no especifica de dónde salió el registro
-# (mantiene la trazabilidad mínima).
-CONSULTA_POR_DEFECTO = "recoleccion_manual"
-
-# ---------------------------------------------------------------------------
-# 3.b) SCRAPING CON SELENIUM (navegador real)
+# 3) SCRAPING CON SELENIUM (navegador real)
 # ---------------------------------------------------------------------------
 # Carpeta base de perfiles de Chrome. Cada red usa un subperfil propio para
 # poder correr varios navegadores EN PARALELO sin conflicto y conservar la

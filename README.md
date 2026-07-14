@@ -79,13 +79,13 @@ navegador legítimo con cookies válidas. Detalles:
 - Cada red tiene un subperfil propio, por lo que los navegadores pueden correr
   **en paralelo** sin conflicto.
 
-Estado de implementación (se construye **una red a la vez**):
+Estado de implementación:
 
-| Red | Mecanismo | Estado |
-|-----|-----------|--------|
-| **X (Twitter)** | Selenium (`src/extractores/twitter_x.py`) | ✅ Implementado |
-| **Facebook** | Selenium | 🚧 En construcción (fallback CSV en `datos_manuales/`) |
-| **TikTok** | Selenium | 🚧 En construcción (fallback CSV en `datos_manuales/`) |
+| Red | Mecanismo | Estrategia de búsqueda |
+|-----|-----------|------------------------|
+| **X (Twitter)** | Selenium (`src/extractores/twitter_x.py`) | Keywords + hashtags en `/search?f=live` |
+| **Facebook** | Selenium (`src/extractores/facebook.py`) | Keywords + hashtags en `/search/posts` |
+| **TikTok** | Selenium (`src/extractores/tiktok.py`) | Keywords en `/search`, hashtags en `/tag/<h>` |
 
 > La Fase 1 (librerías `twikit`/`facebook-scraper`/`TikTokApi`) quedó documentada
 > arriba como justificación de por qué se pasó a Selenium.
@@ -127,8 +127,8 @@ Estado de implementación (se construye **una red a la vez**):
 
 La abstracción **`ExtractorBase`** hace que cada red devuelva `Registro`
 homogéneos; el controlador las trata por igual (polimorfismo) y
-`extraer_seguro()` aísla fallos (si a una red le falta su CSV, las otras
-continúan).
+`extraer_seguro()` aísla fallos (si una red falla o no tiene sesión iniciada,
+las otras continúan).
 
 ---
 
@@ -183,7 +183,8 @@ manualmente en cada red (se guarda en el perfil y se reutiliza):
 
 ```bash
 python3 preparar_sesion.py x          # abre Chrome, inicia sesión en X, ENTER
-# (más adelante: preparar_sesion.py facebook / tiktok)
+python3 preparar_sesion.py facebook   # ídem para Facebook
+python3 preparar_sesion.py tiktok     # ídem para TikTok
 ```
 
 La sesión queda almacenada en `.perfil_navegador/<red>` (no versionado). No se
@@ -241,8 +242,10 @@ Requiere **Python 3.9+**, **Google Chrome** y Selenium.
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2) Iniciar sesión en la red (una vez; ver §7)
+# 2) Iniciar sesión en cada red (una vez; ver §7)
 python3 preparar_sesion.py x
+python3 preparar_sesion.py facebook
+python3 preparar_sesion.py tiktok
 
 # 3) Ejecutar la extracción paralela
 python3 main.py               # scraping paralelo + guardado del dataset JSON
@@ -262,15 +265,14 @@ src/
   navegador.py              # fábrica de Chrome+Selenium (perfil persistente, stealth)
   config.py                 # contexto, problemática, estrategia, parámetros Selenium
   modelos.py                # Registro (modelo unificado + trazabilidad)
-  carga_manual.py           # fallback: lectura+normalización de CSV (FB/TikTok, transitorio)
   utilidades.py             # limpieza de texto, logging
   controlador.py            # núcleo PARALELO: pool de hilos + cola
   almacenamiento.py         # guardado JSON (combinado + por red) + deduplicación
   extractores/
     base.py                 # ExtractorBase (contrato común)
-    twitter_x.py            # scraper Selenium de X (implementado)
-    facebook.py  tiktok.py  # fallback CSV (migración a Selenium en curso)
-datos_manuales/             # CSV de respaldo mientras FB/TikTok migran a Selenium
+    twitter_x.py            # scraper Selenium de X
+    facebook.py             # scraper Selenium de Facebook
+    tiktok.py               # scraper Selenium de TikTok
 datos/                      # datasets generados (JSON)
 evidencias/                 # logs de cada ejecución
 ```
