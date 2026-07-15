@@ -1,6 +1,6 @@
 import json
 import os
-from time import sleep
+from time import monotonic, sleep
 from urllib.parse import quote
 
 from dotenv import load_dotenv
@@ -22,12 +22,16 @@ class ScraperTikTok:
         self,
         busqueda="museo nacional del ecuador",
         scrolls_resultados=10,
-        max_rondas_comentarios=15,
+        max_videos=10,
+        max_rondas_comentarios=10,
+        max_segundos_comentarios=10,
         archivo_salida="datos/tiktok_publicaciones.json",
     ):
         self.busqueda = busqueda
         self.scrolls_resultados = scrolls_resultados
+        self.max_videos = max_videos
         self.max_rondas_comentarios = max_rondas_comentarios
+        self.max_segundos_comentarios = max_segundos_comentarios
         self.archivo_salida = archivo_salida
         self.driver = None
         self.publicaciones = []
@@ -85,21 +89,61 @@ class ScraperTikTok:
     # Extracción de videos de los resultados
     # ------------------------------------------------------------------
     def extraer_videos(self):
-        """Scrollea los resultados y extrae cada tarjeta de video.
-        TikTok marca sus elementos con data-e2e, que son estables."""
+        """Extrae las tarjetas visibles y scrollea hasta el fondo en cada
+        ronda para que TikTok siga cargando más videos; se detiene cuando
+        varias rondas seguidas ya no aportan videos nuevos."""
         vistos = set()
+        rondas_sin_nuevos = 0
         for _ in range(self.scrolls_resultados):
-            for tarjeta in self.driver.find_elements(
+            tarjetas = self.driver.find_elements(
                 By.CSS_SELECTOR, 'div[data-e2e="search_top-item"]'
-            ):
-                video = self.tarjeta_a_video(tarjeta)
+            )
+            nuevos = 0
+            for tarjeta in tarjetas:
+                if len(self.publicaciones) >= self.max_videos:
+                    break
+                try:
+                    video = self.tarjeta_a_video(tarjeta)
+                except StaleElementReferenceException:
+                    continue
                 if video and video["url"] not in vistos:
                     vistos.add(video["url"])
                     self.publicaciones.append(video)
+                    nuevos += 1
                     print(f"[{len(self.publicaciones)}] @{video['autor']}: "
                           f"{video['texto'][:80]}")
-            self.driver.execute_script("window.scrollBy(0, 2500);")
+
+            if len(self.publicaciones) >= self.max_videos:
+                break
+
+            # Algunas variantes muestran un botón en vez de scroll infinito.
+            for boton in self.driver.find_elements(
+                By.XPATH,
+                '//button[contains(., "Cargar más") or contains(., "Load more")]',
+            ):
+                try:
+                    boton.click()
+                    sleep(2)
+                except Exception:
+                    pass
+
+            # Llegar de verdad al fondo es lo que dispara la carga perezosa:
+            # primero la última tarjeta a la vista y luego el fondo del todo.
+            if tarjetas:
+                try:
+                    self.driver.execute_script(
+                        "arguments[0].scrollIntoView({block: 'end'});", tarjetas[-1]
+                    )
+                except StaleElementReferenceException:
+                    pass
+            self.driver.execute_script(
+                "window.scrollTo(0, document.body.scrollHeight);"
+            )
             sleep(3)
+
+            rondas_sin_nuevos = 0 if nuevos else rondas_sin_nuevos + 1
+            if rondas_sin_nuevos >= 3:
+                break
 
         print(f"\nVideos extraídos: {len(self.publicaciones)}")
 
@@ -166,15 +210,46 @@ class ScraperTikTok:
                 video["comentarios"] = []
             print(f"  Comentarios extraídos: {len(video['comentarios'])}")
 
+    def abrir_pestana_comentarios(self):
+        """En la variante nueva del reproductor los comentarios no vienen
+        cargados: hay que abrir primero la pestaña 'Comentarios'."""
+        try:
+            boton = self.driver.find_element(
+                By.XPATH,
+                '//button[@data-testid="tux-web-tab-bar"]'
+                '[.//span[contains(text(), "Comentarios")]]',
+            )
+            boton.click()
+            sleep(3)
+        except Exception:
+            pass  # variante antigua: los comentarios ya están visibles
+
     def extraer_comentarios(self):
         """Scrollea el panel de comentarios (virtualizado) extrayendo en cada
-        ronda, expande las respuestas, y deduplica por el id del comentario."""
+        ronda y expandiendo respuestas. Soporta las dos variantes del
+        reproductor: la antigua (p[data-e2e=comment-level-N] con id) y la
+        nueva de pestañas (span[data-e2e=comment-level-N], sin id)."""
+        self.abrir_pestana_comentarios()
+
+        # Primera entrada a los comentarios: dar tiempo a que el panel
+        # cargue por completo antes de empezar a extraer.
+        sleep(5)
+
         comentarios = {}
         rondas_sin_nuevos = 0
+        inicio = monotonic()
         for _ in range(self.max_rondas_comentarios):
-            # Expandir "Ver N respuestas" visibles (nivel 2).
+            # Tope de tiempo por video, además del tope de scrolls.
+            if monotonic() - inicio > self.max_segundos_comentarios:
+                break
+
+            # Expandir "Ver N respuestas" (nivel 2) en cualquiera de sus formas.
             for boton in self.driver.find_elements(
-                By.CSS_SELECTOR, 'p[data-e2e^="view-more-"]'
+                By.XPATH,
+                '//p[starts-with(@data-e2e, "view-more-")]'
+                ' | //button[.//div[contains(text(), "respuesta")]]'
+                ' | //div[contains(@class, "DivViewRepliesContainer")]'
+                '[not(.//button)]',
             ):
                 try:
                     boton.click()
@@ -184,29 +259,35 @@ class ScraperTikTok:
 
             nuevos = 0
             ultimo = None
-            for parrafo in self.driver.find_elements(
-                By.CSS_SELECTOR,
-                'p[data-e2e="comment-level-1"], p[data-e2e="comment-level-2"]',
+            for cuerpo in self.driver.find_elements(
+                By.CSS_SELECTOR, '[data-e2e^="comment-level-"]'
             ):
                 try:
-                    contenedor = parrafo.find_element(
-                        By.XPATH, './ancestor::div[@id][1]'
+                    contenedor = cuerpo.find_element(
+                        By.XPATH,
+                        './ancestor::div[@id or '
+                        'contains(@class, "DivCommentItemWrapper")][1]',
                     )
-                    id_comentario = contenedor.get_attribute("id") or ""
                     ultimo = contenedor
-                    if not id_comentario or id_comentario in comentarios:
-                        continue
+                    texto = cuerpo.text
                     autor = contenedor.find_element(
-                        By.CSS_SELECTOR, 'span[data-e2e^="comment-username-"]'
+                        By.CSS_SELECTOR, '[data-e2e^="comment-username-"]'
                     ).text
-                    nivel = parrafo.get_attribute("data-e2e")  # comment-level-N
-                    comentarios[id_comentario] = {
+                    # La variante antigua trae el id del comentario; la nueva
+                    # no, así que se deduplica por autor+texto.
+                    clave = contenedor.get_attribute("id") or f"{autor}|{texto}"
+                    if not texto or clave in comentarios:
+                        continue
+                    nivel = cuerpo.get_attribute("data-e2e")  # comment-level-N
+                    comentarios[clave] = {
                         "autor": autor,
-                        "texto": parrafo.text,
+                        "texto": texto,
                         "nivel": int(nivel.rsplit("-", 1)[-1]),
                     }
                     nuevos += 1
                 except StaleElementReferenceException:
+                    continue
+                except Exception:
                     continue
 
             # Scroll dentro del panel: llevar el último comentario a la vista
