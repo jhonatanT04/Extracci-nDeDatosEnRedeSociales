@@ -37,7 +37,7 @@ class AnalizadorSentimientoOpenAI:
         modelo: str | None = None,
         temperatura: float = 0.0,
         timeout: int = 30,
-        max_reintentos: int = 3,
+        max_reintentos: int = 5,
     ):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
@@ -80,8 +80,8 @@ class AnalizadorSentimientoOpenAI:
                 )
                 if resp.status_code == 429:
                     # Límite de tasa: esperar y reintentar.
-                    espera = float(resp.headers.get("Retry-After", 2 * intento))
-                    time.sleep(espera)
+                    espera = float(resp.headers.get("Retry-After", min(60, 3 * (2 ** intento))))
+                    time.sleep(espera + 1.0)
                     continue
                 resp.raise_for_status()
                 contenido = resp.json()["choices"][0]["message"]["content"]

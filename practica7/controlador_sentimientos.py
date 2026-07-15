@@ -117,10 +117,22 @@ class ControladorSentimientos:
 
         def productor(fuente: str, bloque: list[dict]):
             """Hilo productor: clasifica todos los textos de una fuente y
-            los empuja a la cola compartida."""
+            los empuja a la cola compartida. Si una fuente tiene un volumen grande
+            (ej. cientos de registros), utiliza un sub-pool de hilos para solapar
+            la latencia I/O sin bloquear a las demás fuentes."""
             log.info("Clasificando %d textos de %s...", len(bloque), fuente)
-            for r in bloque:
-                cola.put(self._clasificar_registro(r))
+            if len(bloque) > 15:
+                sub_workers = min(12, (len(bloque) // 10) + 2)
+                def _clasificar_y_encolar(r):
+                    cola.put(self._clasificar_registro(r))
+                with ThreadPoolExecutor(
+                    max_workers=sub_workers, thread_name_prefix=f"Sub_{fuente[:3]}"
+                ) as sub_pool:
+                    for r in bloque:
+                        sub_pool.submit(_clasificar_y_encolar, r)
+            else:
+                for r in bloque:
+                    cola.put(self._clasificar_registro(r))
             cola.put(_FIN)
 
         inicio = time.perf_counter()

@@ -114,7 +114,9 @@ def main():
         print(f"  {fuente}:")
         for sentimiento, n in sorted(conteo.items()):
             print(f"      {sentimiento:<15}: {n}")
-    print(f"\nResultados guardados en: {info['ruta']}")
+    print(f"\nResultados guardados en (práctica 7): {info['ruta']}")
+    if 'ruta_raiz' in info:
+        print(f"Resultados guardados en (raíz proyecto): {info['ruta_raiz']}")
 
     if t_secuencial is not None and t_paralelo is not None:
         speedup = t_secuencial / t_paralelo if t_paralelo else 0
