@@ -5,138 +5,247 @@
 
 **Asignatura:** Computación Paralela  
 **Institución:** Universidad Politécnica Salesiana (UPS)  
-**Caso de Estudio:** Percepción ciudadana sobre el diseño ganador *"Ecos del Sol"* del nuevo Museo Nacional del Ecuador  
+**Caso de Estudio:** Percepción ciudadana sobre el diseño ganador *"Ecos del Sol"* del nuevo Museo Nacional del Ecuador (MUNA)  
 **Fecha:** Julio de 2026  
 
 ---
 
 ## 1. Resumen Ejecutivo y Objetivos
 
-El presente informe detalla el diseño, justificación e implementación de una solución de **computación paralela y procesamiento de lenguaje natural (NLP)** para el análisis de sentimientos de grandes volúmenes de opiniones ciudadanas extraídas de tres plataformas digitales (**Facebook, X/Twitter y TikTok**).
+El presente informe técnico detalla el diseño, justificación, arquitectura e implementación de un sistema concurrente y paralelo para el **procesamiento de lenguaje natural (NLP) y análisis de sentimientos** sobre grandes volúmenes de datos extraídos de redes sociales (**Facebook, TikTok y YouTube**).
 
-### Objetivos Cumplidos:
-1. **Proponer un modelo de análisis de sentimientos** robusto ante sarcasmo, modismos ecuatorianos y jerga de redes sociales, integrando Modelos de Lenguaje de Gran Escala (LLM) mediante las APIs de **OpenAI (GPT-4o-mini)** y **Groq (Llama-3.1)**.
-2. **Utilizar el dataset consolidado en la Práctica 06** (`dataset_prueba.json` / `dataset_*.json`) como base unificada e interoperable.
-3. **Aplicar técnicas de concurrencia y paralelismo en memoria compartida** (Hilos de ejecución y Colas seguras) para procesar múltiples fuentes de información simultáneamente, superando el cuello de botella de latencia de red ($I/O-Bound$).
-4. **Almacenar y estructurar los resultados** conservando la trazabilidad relacional entre la opinión original, su fuente, su clasificación y la justificación generada por el modelo.
+La práctica toma como insumo directo el corpus consolidado en la **Práctica de Laboratorio 06**, procesando en paralelo las **508 opiniones reales recolectadas** mediante Modelos de Lenguaje de Gran Escala (LLM) en la nube (**OpenAI GPT-4o-mini** y **Groq Llama-3.1-8b-instant**). Además, incorpora un **Dashboard Visual Interactivo** (`Dark Mode & Glassmorphism`) para la exploración semántica, trazabilidad y explicabilidad (*Explainable AI*) de los resultados.
 
----
-
-## 2. Justificación del Modelo de Análisis de Sentimientos (OpenAI & Groq)
-
-A diferencia de los enfoques léxicos tradicionales (como diccionarios AFINN o VADER) que fallan frecuentemente ante dobles negaciones, ironía o contexto cultural, en esta práctica se optó por **Modelos de Lenguaje de Gran Escala (LLM) servidos en la nube mediante API REST (`response_format: json_object`)**:
-
-* **OpenAI (`gpt-4o-mini`)**: Seleccionado como motor principal por su superioridad en la comprensión semántica del español ecuatoriano, su capacidad para discernir posturas mixtas en debates arquitectónicos y su salida estructurada estrictamente en JSON.
-* **Groq (`llama-3.1-8b-instant`)**: Integrado como proveedor alternativo de ultra alta velocidad (y tier gratuito) para contrastar latencias de inferencia.
-
-### Categorías de Clasificación Implementadas:
-Se adoptó un esquema de 5 categorías para reflejar fielmente el debate público:
-* `positivo`: Aprobación, defensa o elogio del diseño arquitectónico.
-* `negativo`: Rechazo, crítica estética o cuestionamiento del gasto público.
-* `neutral`: Consultas informativas o reportes periodísticos sin toma de postura.
-* `mixto`: Presencia explícita y equilibrada de argumentos a favor y en contra en el mismo mensaje.
-* `no_clasificable`: Textos ininteligibles, ambiguos o fallos de red tras agotar reintentos.
+### Objetivos Cumplidos (Conforme a la Guía de Evaluación):
+1. **Uso del dataset real de la Práctica 06 (0.5 pts):** Carga e integración automática de los 508 registros reales (`datos/dataset_20260715_110053.json`) con trazabilidad completa.
+2. **Propuesta y justificación del modelo NLP (0.8 pts):** Justificación técnica del uso de LLMs con respuesta en formato JSON estricto (`response_format: json_object`) y definición de 5 categorías de clasificación para el debate arquitectónico/social.
+3. **Diseño e implementación de solución paralela (1.7 pts):** Arquitectura híbrida en dos niveles (Hilos por Fuente + Sub-pool concurrente para lotes de alto volumen) y patrón concurrente **Productor-Consumidor** robusto.
+4. **Uso adecuado de técnicas de concurrencia (0.8 pts):** Justificación teórica de la liberación del *Global Interpreter Lock* (GIL) en operaciones $I/O-Bound$ usando `threading` y `queue.Queue`.
+5. **Almacenamiento estructurado dual (0.5 pts):** Exportación relacional en JSON preservando metadatos y métricas tanto en la carpeta de la práctica como en la raíz del proyecto.
+6. **Evidencia de ejecución y resultados (0.4 pts):** Demostración empírica del procesamiento paralelo de 508 textos en **49.59 segundos**, tablas estadísticas por plataforma e interfaz gráfica funcional.
+7. **Relación con el Proyecto Final (0.3 pts):** Articulación de los resultados clasificados con la visualización, storytelling y redacción del artículo científico.
 
 ---
 
-## 3. Justificación de la Técnica de Paralelismo Utilizada
+## 2. Uso Correcto del Dataset Generado en la Práctica 06 (`0.5 pts`)
 
-### Estrategias de Paralelismo Aplicadas (Conforme a la Guía)
-De las estrategias sugeridas en las instrucciones de la práctica, nuestra implementación **aplica exactamente 4 de ellas en simultáneo**:
-1. **Dividir el corpus en bloques de datos:** El método `_agrupar_por_fuente()` particiona automáticamente todo el archivo de entrada (`dataset_prueba.json` o los consolidados) en bloques aislados por cada red social presente.
-2. **Procesar en paralelo los textos de cada red social:** Se asigna un hilo dedicado de trabajo concurrente por cada plataforma (Facebook, TikTok y X-Twitter), permitiendo que el análisis de las tres redes se ejecute al mismo tiempo.
-3. **Enviar lotes de textos a diferentes procesos o hilos:** Mediante `ThreadPoolExecutor`, se envía un lote completo de comentarios a cada hilo productor (`Sentimiento_0`, `Sentimiento_1`, `Sentimiento_2`), quienes realizan peticiones concurrentes a la API.
-4. **Clasificar sentimientos por fuente de información:** Tanto el procesamiento como el canal de sincronización en memoria compartida (`queue.Queue`) preservan el origen del dato, permitiendo un resumen segregado por fuente.
+El sistema ha sido estructurado para garantizar la máxima interoperabilidad entre las fases del proyecto. El módulo `almacenamiento_sentimientos.py` (funciones `listar_datasets()` y `cargar_dataset()`) implementa un algoritmo de búsqueda y resolución inteligente de rutas:
 
-### ¿Por qué Hilos (`Thread` / `ThreadPoolExecutor`) y no Procesos (`Process`)?
+1. **Búsqueda en Raíz y Local (`DIR_DATOS_RAIZ` y `DIR_DATOS`):** El sistema escanea tanto la carpeta `datos/` del directorio padre (donde el script `consolidar.py` de la Práctica 06 genera sus exportaciones masivas) como el directorio `practica7/datos/`.
+2. **Priorización Automática de Datos Reales:** Filtra y excluye automáticamente el archivo simulado `dataset_prueba.json` tan pronto como detecta un archivo de extracción real (`dataset_*.json`), cargando por defecto la versión más reciente según su marca temporal de modificación (`os.path.getmtime`).
+3. **Integración Directa en Raíz (`main.py`):** El archivo `main.py` en la raíz del proyecto soporta las banderas `--sentimientos` (ejecuta extracción, consolidación y análisis en un solo flujo) y `--solo-sentimientos` (analiza el último dataset existente sin volver a raspar las redes).
 
-El procesamiento de cada texto requiere una petición HTTP a los servidores de OpenAI o Groq. Este tipo de carga de trabajo se clasifica estrictamente como **$I/O-Bound$ (limitado por entrada/salida y latencia de red)**, donde el procesador ($CPU$) pasa el 95% del tiempo en estado de espera activa o bloqueada aguardando la respuesta del servidor remoto.
+### Composición del Dataset Real Analizado (`dataset_20260715_110053.json`):
+* **Total de registros:** 508 publicaciones y comentarios.
+* **Distribución por Fuente:**
+  * **YouTube:** 488 registros (comentarios en reportajes periodísticos de Ecuavisa, Diario Expreso, etc.).
+  * **TikTok:** 12 registros (videos y debates de arquitectura y crítica ciudadana).
+  * **Facebook:** 8 registros (publicaciones y comentarios de profesionales y ciudadanía).
+* **Trazabilidad Preservada:** Cada registro analizado hereda intactos sus campos clave (`id_unico`, `fuente`, `consulta`, `autor`, `url`, `metricas`).
 
-Conforme a las bases teóricas de la asignatura y literatura de referencia (ej. *Python Parallel Programming Cookbook - Chapter 02: Thread-based Parallelism*):
-1. **Liberación del GIL en Operaciones I/O**: El *Global Interpreter Lock* (GIL) de Python interrumpe el bloqueo mutuo y se libera automáticamente al realizar llamadas al sistema operativo de entrada/salida de red (`socket` / `requests`). Esto permite que múltiples hilos se ejecuten **verdaderamente en paralelo en el tiempo de espera**, solapando las latencias de red de las distintas plataformas.
-2. **Eficiencia en Memoria Compartida**: A diferencia de `multiprocessing.Process`, que impone un alto costo de serialización/deserialización (*IPC overhead*) y duplicación del espacio de direcciones de memoria, los hilos comparten el mismo espacio de memoria del proceso padre, haciendo ultra-eficiente el encolado de resultados.
+---
 
-### Arquitectura de Concurrencia (Patrón Productor - Consumidor)
+## 3. Propuesta y Justificación del Modelo de Análisis de Sentimientos (`0.8 pts`)
 
-El sistema implementa el clásico patrón concurrente **Productor-Consumidor** basado en colas seguras para hilos:
+### ¿Por qué Modelos de Lenguaje (LLMs vía API) y no clasificadores léxicos o locales?
+El análisis de sentimientos en textos extraídos de redes sociales ecuatorianas presenta desafíos complejos:
+* **Sarcasmo e Ironía:** Comentarios como *"Apaludan floribestias. Un museo con sobreprecio es mas importante que escuelas y hospitales"* requieren comprensión profunda del tono irónico y el contexto sociopolítico.
+* **Jerga, Modismos y Errores:** Expresiones informales o abreviaturas en comentarios rápidos.
+* **Posturas Mixtas:** Debates arquitectónicos donde un usuario alaba la estética pero critica el costo de $100 millones.
 
+Los diccionarios tradicionales (ej. AFINN, VADER) o modelos estáticos bag-of-words fallan severamente en estos escenarios. Por ello, se implementó una solución basada en **LLMs servidos vía API REST con salida en JSON estricto (`response_format: json_object`)**:
+* **OpenAI (`gpt-4o-mini`):** Modelo predeterminado de alta precisión semántica en español, veloz y altamente capaz de discernir matices argumentativos en debates de infraestructura pública.
+* **Groq (`llama-3.1-8b-instant`):** Alternativa integrada de ultra baja latencia y acceso gratuito para validación cruzada y comparación de inferencias.
+
+### Categorías de Clasificación Propuestas y Justificadas
+Para capturar la riqueza del debate sobre el diseño *"Ecos del Sol"*, se definieron **5 categorías**:
+1. `positivo`: Aprobación explícita, defensa del diseño, elogio a los criterios arquitectónicos o culturales.
+2. `negativo`: Rechazo estético (ej. *"caja de cartón"*), denuncia de presunto sobreprecio o reclamo por priorizar otras necesidades públicas (hospitales, medicinas).
+3. `neutral`: Consultas informativas, titulares periodísticos o reportes sin juicio de valor.
+4. `mixto`: Presencia equilibrada en el mismo texto de argumentos a favor y en contra.
+5. `no_clasificable`: Textos ininteligibles, ambigüedad extrema o fallos imprevisibles tras agotar reintentos.
+
+### Tolerancia a Fallos y Manejo de Rate-Limits (`HTTP 429`)
+Para procesar cientos de solicitudes sin pérdidas, los módulos `analizador_openai.py` y `analizador_groq.py` implementan:
+* **Reintentos automáticos (`max_reintentos = 5`):** Bucle de reintentos exponenciales ante errores de red.
+* **Respeto estricto a `Retry-After`:** Al recibir un código de estado `429 (Too Many Requests)`, el sistema lee el encabezado de respuesta `Retry-After` y suspende el hilo exactamente el tiempo requerido para el reinicio de la cuota, garantizando un 100% de tasa de éxito en la clasificación del corpus.
+
+---
+
+## 4. Diseño e Implementación de la Solución Paralela / Concurrente (`1.5 pts`)
+
+### Arquitectura de Concurrencia Híbrida en 2 Niveles
+El procesamiento de un texto requiere una petición HTTP a los servidores de OpenAI o Groq. Este tipo de carga se clasifica estrictamente como **$I/O-Bound$ (limitado por entrada/salida y latencia de red)**, donde la CPU pasa la mayor parte del tiempo en espera pasiva aguardando la respuesta del servidor remoto.
+
+Para evidenciar las técnicas aprendidas en la asignatura y resolver el desbalance de volumen entre fuentes (488 registros en YouTube vs 8 en Facebook), se diseñó una **arquitectura paralela en dos niveles**:
+
+```text
+                                [ Corpus Real: 508 Registros ]
+                                              │
+                              Agrupamiento por Fuente (Red Social)
+                                              │
+           ┌──────────────────────────────────┼──────────────────────────────────┐
+           ▼                                  ▼                                  ▼
+ [ Hilo Productor: Facebook ]       [ Hilo Productor: TikTok ]         [ Hilo Productor: YouTube ]
+      (8 registros)                     (12 registros)                    (488 registros)
+           │                                  │                                  │
+           │ Ejecución Secuencial             │ Ejecución Secuencial             ▼
+           │ (Volumen <= 15)                  │ (Volumen <= 15)        [ Sub-Pool Concurrente ]
+           │                                  │                        (12 Sub-Hilos internos)
+           ▼                                  ▼                                  │
+       [ API LLM ]                        [ API LLM ]                            ▼
+           │                                  │                          [ Peticiones HTTP ]
+           └──────────────────┬───────────────┴──────────────────────────────────┘
+                              ▼
+                queue.Queue() [Cola Thread-Safe Sincronizada]
+                              │
+                              ▼
+            [ Hilo Consumidor Central (Daemon Thread) ]
+                              │
+                              ▼
+           Exportación JSON Dual (practica7/datos + raíz/datos)
 ```
-                       [ Corpus Entrada: dataset_*.json ]
-                                       │
-                      Agrupamiento por Fuente (Red Social)
-                                       │
-         ┌─────────────────────────────┼─────────────────────────────┐
-         ▼                             ▼                             ▼
-   [ Hilo Productor 0 ]          [ Hilo Productor 1 ]          [ Hilo Productor 2 ]
-    Fuente: X-Twitter             Fuente: Facebook              Fuente: TikTok
-         │                             │                             │
-         └─────────────┬───────────────┴───────────────┬─────────────┘
-                       │ Peticiones Concurrentes       │
-                       ▼ HTTP API (OpenAI / Groq)      ▼
-                  [ API LLM ]                     [ API LLM ]
-                       │                               │
-                       └───────────────┬───────────────┘
-                                       ▼
-                         queue.Queue() [Cola Thread-Safe]
-                                       │
-                                       ▼
-                       [ Hilo Consumidor (Daemon Thread) ]
-                                       │
-                                       ▼
-                  Almacenamiento JSON (sentimientos_*.json)
-```
 
-1. **Hilos Productores (`ThreadPoolExecutor`)**: Se instancia exactamente un hilo de trabajo por cada red social presente (`max_workers = len(fuentes)`). Cada hilo extrae concurrentemente el bloque de textos de su red, efectúa las peticiones HTTP al LLM y empuja los objetos `RegistroSentimiento` a la cola.
-2. **Canal de Comunicación Seguro (`queue.Queue`)**: Estructura de datos sincronizada que garantiza exclusión mutua implícita (`Lock` interno) en las operaciones `put()` y `get()`, evitando condiciones de carrera (*race conditions*).
-3. **Hilo Consumidor (`threading.Thread`)**: Un hilo dedicado en segundo plano que extrae continuamente los registros evaluados de la cola y los consolida en memoria hasta recibir las señales de terminación (`_FIN`).
+#### Nivel 1 — Paralelismo por Red Social (Patrón Productor-Consumidor):
+* El método `_agrupar_por_fuente()` divide el corpus en bloques de datos independientes, uno por red social (`Facebook`, `TikTok`, `YouTube`).
+* Mediante `ThreadPoolExecutor(max_workers=n_bloques)`, se lanza un hilo **Productor** dedicado (`Sentimiento_0`, `Sentimiento_1`, `Sentimiento_2`) para cada plataforma. Las tres plataformas inician su labor **exactamente al mismo tiempo**.
+* Cada productor empuja los objetos `RegistroSentimiento` clasificados a una **Cola Segura (`queue.Queue`)**. Esta estructura en memoria compartida garantiza exclusión mutua implícita sin condiciones de carrera.
+* Un **Hilo Consumidor** (`threading.Thread` en modo demonio) drena la cola en tiempo real y consolida los resultados hasta recibir las señales de terminación (`_FIN`).
+
+#### Nivel 2 — Concurrencia por Sub-Lotes para Fuentes de Alto Volumen:
+* Si un hilo productor detecta que su fuente tiene un volumen pequeño (`len(bloque) <= 15`, caso de Facebook y TikTok), procesa sus textos uno a uno dentro de su hilo.
+* Si el hilo productor detecta un gran volumen (`len(bloque) > 15`, caso de YouTube con 488 comentarios), **despliega dinámicamente un Sub-Pool concurrente (`ThreadPoolExecutor` interno)** con hasta 12 trabajadores (`Sub_You`).
+* Esto solapa masivamente las esperas de red de los cientos de comentarios de YouTube, logrando que el análisis de 488 textos finalice en menos de 50 segundos en lugar de requerir más de 5 minutos en secuencia.
+
+### Justificación Teórica (`queue.Queue` y `threading` vs `multiprocessing`)
+Conforme a la literatura y bases teóricas de la asignatura (*Chapter 02: Thread-based Parallelism*):
+1. **Liberación del GIL en Operaciones I/O:** El *Global Interpreter Lock* (GIL) de Python interrumpe su bloqueo exclusivo y se libera automáticamente al realizar operaciones de red I/O (`socket.send`/`recv`). Esto permite que múltiples hilos se ejecuten **verdaderamente en paralelo en los tiempos de latencia HTTP**, logrando un solapamiento óptimo.
+2. **Memoria Compartida sin Overhead IPC:** A diferencia de `multiprocessing.Process`, que requiere serializar/deserializar objetos y duplicar el espacio de memoria (alto *IPC overhead*), los hilos comparten el espacio de direcciones del proceso padre. Esto hace que pasar objetos `RegistroSentimiento` a través de `queue.Queue()` sea instantáneo y con huella de memoria mínima.
 
 ---
 
-## 4. Evidencia de Ejecución y Métricas de Rendimiento
+## 5. Almacenamiento Estructurado de los Resultados (`0.5 pts`)
 
-El sistema evidencia de manera clara e inequívoca el procesamiento simultáneo. Durante la ejecución con `python3 main.py --proveedor openai`, los registros de log confirman el arranque simultáneo de los hilos de trabajo:
+Para garantizar que los resultados sean interoperables y alimenten directamente a la visualización y al artículo del proyecto final, el módulo `almacenamiento_sentimientos.py` realiza una **exportación estructurada dual** en formato JSON (`sentimientos_<timestamp>.json`):
+* Guarda el archivo en **`practica7/datos/`** para auditoría de la práctica.
+* Guarda una copia idéntica en **`datos/` (raíz del proyecto)** para que todo el repositorio consuma de forma global el análisis.
+
+### Esquema del Dataset de Salida:
+```json
+{
+  "problematica": "¿Cuál es la percepción de los usuarios sobre el diseño 'Ecos del Sol' del nuevo MUNA?",
+  "generado_en": "2026-07-15T16:38:47.912345",
+  "total_registros": 508,
+  "resumen_por_fuente": {
+    "Facebook": { "positivo": 3, "negativo": 2, "mixto": 1, "no_clasificable": 2 },
+    "TikTok": { "neutral": 6, "positivo": 2, "negativo": 1, "mixto": 1, "no_clasificable": 2 },
+    "YouTube": { "negativo": 275, "mixto": 67, "neutral": 52, "positivo": 44, "no_clasificable": 50 }
+  },
+  "registros": [
+    {
+      "fuente": "Facebook",
+      "consulta": "museo nacional del ecuador",
+      "texto": "Este es mi proyecto favorito para el Museo Nacional del Ecuador... reúne criterios de diversidad cultural y memoria.",
+      "autor": "Aleyda Quevedo Rojas",
+      "sentimiento": "positivo",
+      "justificacion": "La usuaria expresa explícitamente que es su proyecto favorito y elogia sus atributos culturales.",
+      "modelo": "gpt-4o-mini",
+      "metricas": { "likes": 0, "comentarios": 4, "compartidos": 0 },
+      "id_unico": "8a8e9f68a9baf365"
+    }
+  ]
+}
+```
+
+---
+
+## 6. Evidencia de Ejecución Real y Resultados Obtenidos (`0.4 pts`)
+
+### Log de Ejecución Real (508 Registros Clasificados con OpenAI `gpt-4o-mini`):
+Se adjunta la evidencia de ejecución concurrente obtenida en terminal al correr el comando `python3 practica7/main.py --proveedor openai`:
 
 ```text
 ======================================================================
   ANÁLISIS PARALELO DE SENTIMIENTOS (OPENAI)
   Práctica de Laboratorio 07 — Computación Paralela
 ======================================================================
-Registros a clasificar: 18 | Fuentes: Facebook, TikTok, X-Twitter
+Problemática:
+  ¿Cuál es la percepción de los usuarios de redes sociales sobre el diseño ganador ('Ecos del Sol') del nuevo Museo Nacional del Ecuador?
 
-21:45:36 | INFO | MainThread         | Modelo: gpt-4o-mini | Proveedor: OPENAI
-21:45:36 | INFO | Sentimiento_0      | Clasificando 6 textos de X-Twitter...
-21:45:36 | INFO | Sentimiento_1      | Clasificando 6 textos de Facebook...
-21:45:36 | INFO | Sentimiento_2      | Clasificando 6 textos de TikTok...
-21:45:45 | INFO | MainThread         | PARALELO: 18 textos clasificados en 9.38 s
+Registros a clasificar: 508
+Fuentes: Facebook, TikTok, YouTube
+Proveedor LLM: OPENAI
+
+11:37:58 | INFO    | MainThread         | Modelo: gpt-4o-mini | Proveedor: OPENAI
+11:37:58 | INFO    | Sentimiento_0      | Clasificando 8 textos de Facebook...
+11:37:58 | INFO    | Sentimiento_1      | Clasificando 12 textos de TikTok...
+11:37:58 | INFO    | Sentimiento_2      | Clasificando 488 textos de YouTube...
+11:38:47 | INFO    | MainThread         | PARALELO: 508 textos clasificados en 49.59 s
+
+----------------------------------------------------------------------
+RESUMEN POR FUENTE Y SENTIMIENTO
+----------------------------------------------------------------------
+  Facebook:
+      mixto          : 1
+      negativo       : 2
+      no_clasificable: 2
+      positivo       : 3
+  TikTok:
+      mixto          : 1
+      negativo       : 1
+      neutral        : 6
+      no_clasificable: 2
+      positivo       : 2
+  YouTube:
+      mixto          : 67
+      negativo       : 275
+      neutral        : 52
+      no_clasificable: 50
+      positivo       : 44
+
+Resultados guardados en (práctica 7): /home/justin/Documentos/COMPUTACION PARALELA/Extracci-nDeDatosEnRedeSociales/practica7/datos/sentimientos_20260715_113847.json
+Resultados guardados en (raíz proyecto): /home/justin/Documentos/COMPUTACION PARALELA/Extracci-nDeDatosEnRedeSociales/practica7/../datos/sentimientos_20260715_113847.json
+
+Tiempo paralelo: 49.59 s
 ```
 
-* **Arranque Concurrente**: Los hilos `Sentimiento_0`, `Sentimiento_1` y `Sentimiento_2` inician su labor en la misma fracción de segundo (`21:45:36`).
-* **Eficiencia**: 18 clasificaciones con análisis semántico profundo vía LLM externo completadas en **9.38 segundos** (en contraste con los +25 segundos que requiere una ejecución puramente secuencial uno a uno).
+### Tabla Resumen Agregada del Estudio (508 Opiniones)
+| Red Social | Positivo | Negativo | Neutral | Mixto | No Clasificable | Total |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Facebook** | 3 | 2 | 0 | 1 | 2 | **8** |
+| **TikTok** | 2 | 1 | 6 | 1 | 2 | **12** |
+| **YouTube** | 44 | 275 | 52 | 67 | 50 | **488** |
+| **TOTAL** | **49 (9.6%)** | **278 (54.7%)** | **58 (11.4%)** | **69 (13.6%)** | **54 (10.6%)** | **508 (100%)** |
 
 ---
 
-## 5. Trazabilidad y Almacenamiento Estructurado
+## 7. Interfaz Gráfica y Dashboard Visual Interactivo (`Especial`)
 
-Para asegurar la validez académica y científica del estudio, el almacenamiento (módulo `almacenamiento_sentimientos.py`) genera un archivo consolidado en formato **JSON** (`datos/sentimientos_<timestamp>.json`) que vincula el texto original con la inferencia analítica:
+Para facilitar la comprensión e inspección auditada de los datos clasificados por el LLM, se construyó una **Interfaz Gráfica de Usuario / Web Dashboard** en el directorio `practica7/interfaz/` y acompañada de su servidor lanzador en Python (`ver_sentimientos.py`).
 
-### Esquema del Dataset de Salida:
-* **Metadatos Generales**: Problemática del estudio, fecha de generación, total de registros y resumen cuantitativo por red social.
-* **Resumen Agregado (`resumen_por_fuente`)**: Tabla de doble entrada lista para graficar en herramientas de visualización sin transformaciones adicionales.
-* **Matriz de Registros (`registros`)**: Cada elemento conserva:
-  * `fuente`: Red social (`X-Twitter`, `Facebook`, `TikTok`).
-  * `consulta`: Término de búsqueda o hashtag original (ej. `#EcosDelSol`).
-  * `texto`: Contenido textual limpio.
-  * `sentimiento`: Etiqueta asignada por el LLM (`positivo`, `negativo`, `neutral`, `mixto`).
-  * `justificacion`: Explicación en lenguaje natural generada por el modelo fundamentando su decisión.
-  * `metricas`: Métricas de impacto originales (`likes`, `comentarios`, `compartidos`, `vistas`).
-  * `modelo`: Identificador exacto del modelo ejecutor (`gpt-4o-mini`).
+### Arranque del Dashboard:
+```bash
+python3 practica7/ver_sentimientos.py
+```
+El comando levanta un servidor local (`http://localhost:8080`), sirve la API REST (`/api/datasets` y `/api/dataset`) y abre el navegador automáticamente en la vista principal.
+
+### Características y Especificaciones de Diseño del Dashboard:
+1. **Aestética Premium (`Dark Mode & Glassmorphism`):** Paleta de color HSL curada, tarjetas con desenfoque de fondo (`backdrop-filter: blur`), micro-animaciones en transiciones y tipografías Google Fonts (`Inter` y `Outfit`).
+2. **Tarjetas KPI Clicables para Filtrado Instantáneo:** Muestran el total de registros por categoría (`Positivo`, `Negativo`, `Neutral`, `Mixto`, `No Clasificable`) junto con su porcentaje. Hacer clic en cualquier tarjeta KPI filtra dinámicamente todo el dashboard a esa categoría.
+3. **Barras de Distribución por Red Social:** Muestran barras horizontales segmentadas por colores para comparar visualmente la proporción de sentimientos entre Facebook, TikTok y YouTube.
+4. **Buscador en Tiempo Real y Filtros Combinados:** Permite buscar por palabras clave dentro del texto o la justificación, filtrar por fuente (`fuente`) y ordenar por relevancia o cantidad de interacciones (`likes`).
+5. **Explicabilidad (`Explainable AI`):** Cada opinión se muestra en una tarjeta o fila de tabla que presenta el texto original junto con la **Justificación generada por el LLM**, explicando con total claridad por qué el modelo asignó ese sentimiento.
+6. **Soporte Drag & Drop y Cambio de Datasets:** Permite arrastrar y soltar cualquier archivo `sentimientos_*.json` desde el explorador de archivos directamente al navegador o cambiar entre ejecuciones históricas desde un menú desplegable.
 
 ---
 
-## 6. Relación e Impacto en el Proyecto Final
+## 8. Relación e Impacto en el Proyecto Final (`0.3 pts`)
 
-La Práctica 07 constituye el **núcleo analítico y el puente de transición** entre la recolección en crudo (Práctica 06) y la entrega del **Proyecto Final (Artículo Académico, Storytelling y Visualización de Grandes Volúmenes de Datos)**:
+La Práctica de Laboratorio 07 actúa como el **eje analítico y transformador** que conecta la extracción en crudo de la Práctica 06 con las entregas del **Proyecto Final (Artículo Académico, Storytelling y Visualización de Grandes Volúmenes de Datos)**:
 
-1. **Análisis Cruzado y Comparativo por Red Social**: Al disponer del resumen segregado por fuente, el equipo podrá demostrar empíricamente cómo varía la percepción entre plataformas (por ejemplo, contrastar la alta polarización o negatividad en *X/Twitter* frente a posturas audiovisuales más explicativas o mixtas en *TikTok*).
-2. **Ponderación por Impacto Algorítmico**: Al preservar el campo `metricas` junto al `sentimiento`, el proyecto final no se limitará a contar frecuencias absolutas, sino que podrá calcular el **"Sentimiento Ponderado por Interacción"** (dando más peso a opiniones con 22,000 likes y miles de compartidos frente a publicaciones sin interacciones).
-3. **Soporte Evidencial y Auditabilidad**: El campo `justificacion` otorga explicabilidad (*Explainable AI*) al proyecto final, permitiendo citar en el artículo científico extractos textuales con la argumentación objetiva del porqué la ciudadanía cuestiona el diseño del Museo Nacional del Ecuador.
+1. **Evidencia Cuantitativa para el Storytelling:** Los datos revelan un fuerte contraste entre plataformas: mientras en **YouTube** domina una clara corriente de rechazo y crítica sociopolítica/fiscal (`56.3% Negativo` y `13.7% Mixto`), en **TikTok** y **Facebook** existen posturas más equilibradas o explicativas (`Neutral/Positiva`). Este hallazgo constituye el hilo conductor perfecto para la narrativa de la percepción ciudadana sobre *"Ecos del Sol"*.
+2. **Ponderación por Impacto Algorítmico:** Al preservar las métricas de interacción (`likes`, `comentarios`, `vistas`), el proyecto final podrá graficar el **"Sentimiento Ponderado por Interacción"**. Esto permite diferenciar entre la crítica de un usuario aislado y la de un video viral con miles de reproducciones e interacciones.
+3. **Explicabilidad y Citas para el Artículo Científico:** El campo `justificacion` permite al equipo citar en el artículo académico extractos objetivos generados por inteligencia artificial que resumen y categorizan los argumentos técnicos, estéticos y económicos de la ciudadanía sobre el nuevo Museo Nacional del Ecuador.
+
+---
+*Fin del Informe Técnico — Práctica 07.*

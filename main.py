@@ -28,6 +28,16 @@ def main():
         choices=["groq", "openai"],
         help="Proveedor de LLM para el análisis de sentimientos: groq (defecto) u openai.",
     )
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Compara tiempos secuencial vs paralelo en Práctica 07.",
+    )
+    parser.add_argument(
+        "--secuencial",
+        action="store_true",
+        help="Ejecuta sólo en modo secuencial en Práctica 07.",
+    )
     args = parser.parse_args()
 
     ruta_dataset = None
@@ -55,7 +65,17 @@ def main():
 
         analizador = crear_analizador(args.proveedor)
         controlador = ControladorSentimientos(analizador)
-        resultados, duracion = controlador.ejecutar_paralelo(registros)
+
+        t_secuencial = t_paralelo = None
+        if args.secuencial:
+            resultados, t_secuencial = controlador.ejecutar_secuencial(registros)
+        elif args.benchmark:
+            print("== Fase 1/2: modo SECUENCIAL (referencia) ==")
+            _, t_secuencial = controlador.ejecutar_secuencial(registros)
+            print("== Fase 2/2: modo PARALELO (solución) ==")
+            resultados, t_paralelo = controlador.ejecutar_paralelo(registros)
+        else:
+            resultados, t_paralelo = controlador.ejecutar_paralelo(registros)
 
         info = guardar(resultados, problematica=dataset.get("problematica", ""))
         print("\n" + "-" * 70)
@@ -66,6 +86,19 @@ def main():
             for sentimiento, n in sorted(conteo.items()):
                 print(f"      {sentimiento:<15}: {n}")
         print(f"\nResultados guardados en: {info.get('ruta_raiz', info['ruta'])}")
+
+        if t_secuencial is not None and t_paralelo is not None:
+            speedup = t_secuencial / t_paralelo if t_paralelo else 0
+            print("\n" + "-" * 70)
+            print("COMPARACIÓN DE RENDIMIENTO")
+            print("-" * 70)
+            print(f"Tiempo secuencial    : {t_secuencial:.2f} s")
+            print(f"Tiempo paralelo      : {t_paralelo:.2f} s")
+            print(f"Aceleración (speedup): {speedup:.2f}x")
+        elif t_secuencial is not None:
+            print(f"\nTiempo secuencial: {t_secuencial:.2f} s")
+        elif t_paralelo is not None:
+            print(f"\nTiempo paralelo: {t_paralelo:.2f} s")
 
 
 if __name__ == "__main__":
