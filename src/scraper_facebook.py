@@ -33,7 +33,14 @@ class ScraperFacebook:
         self.username = os.getenv("FACEBOOK_USER", "")
         self.password = os.getenv("FACEBOOK_PASSWORD", "")
         self.driver = None
+        self.gestor = None
         self.publicaciones = []
+
+    def _checkpoint(self):
+        """Si otro hilo está iniciando sesión, se bloquea aquí hasta que
+        termine (ver GestorLogin)."""
+        if self.gestor is not None:
+            self.gestor.esperar()
 
     # ------------------------------------------------------------------
     # Navegador y sesión
@@ -207,6 +214,7 @@ class ScraperFacebook:
 
         while (scrolls_sin_nuevos < self.scrolls_feed
                and len(self.publicaciones) < self.max_publicaciones):
+            self._checkpoint()
             objetivo = None
             autor = descripcion = clave = ""
             for boton in self.driver.find_elements(By.XPATH, xpath_boton):
@@ -280,10 +288,15 @@ class ScraperFacebook:
     # ------------------------------------------------------------------
     # Orquestación
     # ------------------------------------------------------------------
-    def ejecutar(self):
+    def ejecutar(self, gestor=None):
+        self.gestor = gestor
         self.crear_driver()
         try:
-            self.iniciar_sesion()
+            if gestor is not None:
+                gestor.con_login(self.iniciar_sesion, "Facebook")
+            else:
+                self.iniciar_sesion()
+            self._checkpoint()
             self.buscar()
             self.extraer_publicaciones()
             self.guardar()

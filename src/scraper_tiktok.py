@@ -34,7 +34,14 @@ class ScraperTikTok:
         self.max_segundos_comentarios = max_segundos_comentarios
         self.archivo_salida = archivo_salida
         self.driver = None
+        self.gestor = None
         self.publicaciones = []
+
+    def _checkpoint(self):
+        """Si otro hilo está iniciando sesión, se bloquea aquí hasta que
+        termine (ver GestorLogin)."""
+        if self.gestor is not None:
+            self.gestor.esperar()
 
     # ------------------------------------------------------------------
     # Navegador y sesión
@@ -95,6 +102,7 @@ class ScraperTikTok:
         vistos = set()
         rondas_sin_nuevos = 0
         for _ in range(self.scrolls_resultados):
+            self._checkpoint()
             tarjetas = self.driver.find_elements(
                 By.CSS_SELECTOR, 'div[data-e2e="search_top-item"]'
             )
@@ -200,6 +208,7 @@ class ScraperTikTok:
     def extraer_comentarios_de_videos(self):
         """Abre cada video por su URL y extrae los comentarios."""
         for n, video in enumerate(self.publicaciones, start=1):
+            self._checkpoint()
             print(f"\n[{n}/{len(self.publicaciones)}] Comentarios de {video['url']}")
             try:
                 self.driver.get(video["url"])
@@ -319,10 +328,15 @@ class ScraperTikTok:
     # ------------------------------------------------------------------
     # Orquestación
     # ------------------------------------------------------------------
-    def ejecutar(self):
+    def ejecutar(self, gestor=None):
+        self.gestor = gestor
         self.crear_driver()
         try:
-            self.iniciar_sesion()
+            if gestor is not None:
+                gestor.con_login(self.iniciar_sesion, "TikTok")
+            else:
+                self.iniciar_sesion()
+            self._checkpoint()
             self.abrir_buscador()
             self.buscar()
             self.extraer_videos()

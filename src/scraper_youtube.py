@@ -27,7 +27,14 @@ class ScraperYouTube:
         self.max_comentarios_por_video = max_comentarios_por_video
         self.archivo_salida = archivo_salida
         self.api_key = os.getenv("YOUTUBE_API_KEY", "")
+        self.gestor = None
         self.publicaciones = []
+
+    def _checkpoint(self):
+        """Si un scraper de Selenium está iniciando sesión en otro hilo, se
+        bloquea aquí hasta que termine (ver GestorLogin)."""
+        if self.gestor is not None:
+            self.gestor.esperar()
 
     # ------------------------------------------------------------------
     # Videos
@@ -105,6 +112,7 @@ class ScraperYouTube:
 
     def extraer_comentarios_de_videos(self):
         for n, video in enumerate(self.publicaciones, start=1):
+            self._checkpoint()
             video["comentarios"] = self.extraer_comentarios(video["video_id"])
             print(f"[{n}/{len(self.publicaciones)}] {video['autor']}: "
                   f"{len(video['comentarios'])} comentarios")
@@ -121,10 +129,12 @@ class ScraperYouTube:
     # ------------------------------------------------------------------
     # Orquestación
     # ------------------------------------------------------------------
-    def ejecutar(self):
+    def ejecutar(self, gestor=None):
+        self.gestor = gestor
         if not self.api_key:
             print("Define YOUTUBE_API_KEY en .env")
             return
+        self._checkpoint()
         self.buscar_videos()
         self.extraer_comentarios_de_videos()
         self.guardar()

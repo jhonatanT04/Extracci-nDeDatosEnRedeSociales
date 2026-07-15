@@ -1,278 +1,189 @@
 # Extracción Paralela de Datos en Redes Sociales — Museo Nacional del Ecuador
 
 **Asignatura:** Computación Paralela — Universidad Politécnica Salesiana (UPS)
-**Práctica:** Extracción concurrente de datos desde redes sociales
 **Integrantes:** _(completar con los nombres del grupo)_
 
-Sistema que carga, normaliza y almacena **en paralelo** opiniones publicadas en
-**X (Twitter), Facebook y TikTok** sobre el diseño ganador del nuevo Museo
-Nacional del Ecuador, generando un dataset textual con trazabilidad, listo para
-el análisis de sentimientos del proyecto final.
+Sistema que extrae **en paralelo** opiniones publicadas en **Facebook, TikTok y
+YouTube** sobre el diseño ganador del nuevo Museo Nacional del Ecuador, y genera
+un dataset textual unificado con trazabilidad, listo para el análisis de
+sentimientos del proyecto final.
 
 ---
 
-## 1. Contexto y problemática _(rúbrica: 0.7)_
+## Contexto y problemática
 
-**Contexto.** El Gobierno del Ecuador realizó una convocatoria internacional
-para seleccionar el diseño arquitectónico del nuevo Museo Nacional del Ecuador,
-destinado a albergar más de 100.000 bienes patrimoniales. El diseño ganador,
-**"Ecos del Sol"**, recibió numerosas críticas en redes sociales de ciudadanos,
-arquitectos y artistas por aspectos estéticos, culturales y de representatividad
-nacional. La controversia llevó al Gobierno a dejar sin efecto la propuesta
-ganadora y reconvocar a los finalistas.
+El Gobierno del Ecuador realizó una convocatoria internacional para seleccionar
+el diseño arquitectónico del nuevo Museo Nacional del Ecuador, destinado a
+albergar más de 100.000 bienes patrimoniales. El diseño ganador, **"Ecos del
+Sol"**, recibió numerosas críticas en redes sociales de ciudadanos, arquitectos
+y artistas por aspectos estéticos, culturales y de representatividad nacional.
 
-**Problemática.**
-> ¿Cuál es la percepción de los usuarios de redes sociales sobre el diseño
-> ganador ("Ecos del Sol") del nuevo Museo Nacional del Ecuador, y cuáles son
-> los principales argumentos a favor y en contra expresados en las plataformas
-> digitales?
+**Problemática.** ¿Cuál es la percepción de los usuarios de redes sociales sobre
+el diseño ganador ("Ecos del Sol") del nuevo Museo Nacional del Ecuador?
 
 **Objetivo.** Analizar las opiniones publicadas en redes sociales para
-identificar el **sentimiento predominante** y los **principales temas de
-discusión**.
-
-Definido en [`src/config.py`](src/config.py) → `CONTEXTO`, `PROBLEMATICA`,
-`OBJETIVO`.
+identificar el sentimiento predominante y los principales temas de discusión.
 
 ---
 
-## 2. Redes seleccionadas y su justificación _(rúbrica: 0.6)_
+## Redes seleccionadas
 
-| Red | Por qué es relevante |
-|-----|----------------------|
-| **X (Twitter)** | Epicentro del debate público inmediato; arquitectos y ciudadanos criticaron el diseño en tiempo real |
-| **Facebook** | Los medios ecuatorianos publicaron la noticia y la ciudadanía opinó masivamente en los comentarios |
-| **TikTok** | Contenido audiovisual y opinión de públicos jóvenes sobre la polémica |
+| Red | Por qué es relevante | Cómo se extrae |
+|-----|----------------------|----------------|
+| **Facebook** | Los medios ecuatorianos publicaron la noticia y la ciudadanía opinó masivamente en los comentarios | Selenium sobre Chrome real (sesión iniciada por el usuario) |
+| **TikTok** | Contenido audiovisual y opinión de públicos jóvenes sobre la polémica | Selenium sobre Chrome real |
+| **YouTube** | Videos de noticias y análisis con debate extenso en los comentarios | API oficial (YouTube Data API v3) |
 
-Las tres concentran la conversación pública ecuatoriana sobre el tema, con
-perfiles de usuario distintos, lo que enriquece el análisis de percepción.
-
----
-
-## 3. Estrategia de extracción (justificación del diseño)
-
-La consigna pide *"proponer e implementar una estrategia de extracción... que
-puede incluir scrapers, APIs oficiales, librerías de terceros u otros mecanismos
-justificados"*, reconociendo que **algunas redes tienen restricciones de
-acceso**. Este proyecto documenta ese caso real:
-
-**Fase 1 — Se intentó scraping automático** con librerías de terceros. No fue
-viable por las defensas anti-bot de cada plataforma:
-
-| Red | Librería probada | Resultado |
-|-----|------------------|-----------|
-| X (Twitter) | `twikit` | La generación del *x-client-transaction-id* está rota contra el JS ofuscado actual de X (`Couldn't get KEY_BYTE indices`). Sin API gratuita. |
-| Facebook | `facebook-scraper` | Devuelve 0 publicaciones incluso con cookies de sesión válidas (Facebook cambió/bloqueó `m.facebook.com`). |
-| TikTok | `TikTokApi` (Playwright) | Detección de bot en modo headless (`empty response... detecting you're a bot`). |
-
-**Fase 2 — Estrategia adoptada: scraping con Selenium (navegador real).** En
-lugar de librerías que imitan el tráfico (fácilmente detectables), se automatiza
-**Google Chrome real** con Selenium sobre una **sesión iniciada por el usuario**.
-Esto sortea gran parte de la detección anti-bot porque las peticiones salen de un
-navegador legítimo con cookies válidas. Detalles:
-
-- **Perfil persistente por red** (`.perfil_navegador/<red>`, ver
-  [`src/navegador.py`](src/navegador.py)): el login manual se hace **una sola
-  vez** con `preparar_sesion.py` y la sesión se reutiliza en cada corrida.
-- **Ajustes stealth**: se desactivan las banderas de automatización y se oculta
-  `navigator.webdriver`.
-- Cada red tiene un subperfil propio, por lo que los navegadores pueden correr
-  **en paralelo** sin conflicto.
-
-Estado de implementación:
-
-| Red | Mecanismo | Estrategia de búsqueda |
-|-----|-----------|------------------------|
-| **X (Twitter)** | Selenium (`src/extractores/twitter_x.py`) | Keywords + hashtags en `/search?f=live` |
-| **Facebook** | Selenium (`src/extractores/facebook.py`) | Keywords + hashtags en `/search/posts` |
-| **TikTok** | Selenium (`src/extractores/tiktok.py`) | Keywords en `/search`, hashtags en `/tag/<h>` |
-
-> La Fase 1 (librerías `twikit`/`facebook-scraper`/`TikTokApi`) quedó documentada
-> arriba como justificación de por qué se pasó a Selenium.
-
-### Estrategia de búsqueda (centralizada en [`src/config.py`](src/config.py))
-- **Palabras clave:** `Ecos del Sol museo`, `nuevo Museo Nacional del Ecuador`…
-- **Hashtags:** `#EcosDelSol`, `#MuseoNacionalEcuador`, `#NuevoMuseoNacional`…
-- Cada registro guarda en el campo `consulta` con qué criterio se localizó
-  (trazabilidad).
+Facebook y TikTok bloquean el scraping con librerías de terceros (imitan el
+tráfico y son detectadas fácilmente), por lo que se automatiza **Google Chrome
+real** con Selenium sobre una sesión que el usuario inicia manualmente: las
+peticiones salen de un navegador legítimo con cookies válidas y esquivan gran
+parte de la detección anti-bot. YouTube sí ofrece una **API oficial gratuita**,
+así que ahí no hace falta navegador ni login: basta una clave de API.
 
 ---
 
-## 4. Diseño de la solución y arquitectura _(rúbrica: 0.7)_
+## Estrategia de búsqueda
+
+Todas las fuentes se consultan con el mismo tema (`museo nacional del ecuador`,
+configurable en cada scraper). Cada registro guarda en el campo `consulta` con
+qué criterio se localizó, para mantener la trazabilidad.
+
+- **Facebook:** busca en el buscador del sitio, recorre el feed de resultados de
+  forma incremental (ignorando bloques de sugerencias como "Páginas") y, por
+  cada publicación, abre y extrae sus comentarios.
+- **TikTok:** busca el tema, recorre las tarjetas de video de los resultados y,
+  por cada video, abre la pestaña de comentarios y los extrae.
+- **YouTube:** busca videos del tema con la API y descarga los hilos de
+  comentarios (con respuestas anidadas) mediante paginación.
+
+---
+
+## Arquitectura
 
 ```
-                 ┌──────────────────────────────────────────┐
-                 │              main.py (CLI)                │
-                 └───────────────────┬──────────────────────┘
+                 ┌────────────────────────────────────────────┐
+                 │                 main.py                     │
+                 └───────────────────┬────────────────────────┘
                                      │
-                 ┌───────────────────▼──────────────────────┐
-                 │   ControladorParalelo (src/controlador)   │
-                 │   POOL de hilos + COLA productor/consumidor│
-                 └───────┬──────────────┬──────────────┬─────┘
-             (hilo 1)    │   (hilo 2)   │   (hilo 3)   │
-                  ┌──────▼───┐   ┌──────▼───┐   ┌──────▼───┐
-                  │ X/Twitter│   │ Facebook │   │  TikTok  │   ← PRODUCTORES
-                  │ Selenium │   │ Selenium │   │ Selenium │     (scrapean+
-                  └──────┬───┘   └──────┬───┘   └──────┬───┘      normalizan)
-                         └───────┬──────┴──────────────┘
-                                 ▼
-                          queue.Queue          ← canal común
-                                 ▼
-                      Consumidor (recolecta)    ← CONTROLADOR central
-                                 ▼
-                    Registro normalizado (src/modelos)
-                                 ▼
-               Almacenamiento JSON (src/almacenamiento)
+                 ┌───────────────────▼────────────────────────┐
+                 │        src/controlador.py                   │
+                 │   ThreadPoolExecutor (un hilo por fuente)   │
+                 │   + GestorLogin compartido                  │
+                 └──────┬───────────────┬───────────────┬──────┘
+             (hilo 1)   │    (hilo 2)   │    (hilo 3)    │
+              ┌─────────▼──┐   ┌────────▼──┐   ┌─────────▼──┐
+              │  Facebook  │   │  TikTok   │   │  YouTube   │
+              │  Selenium  │   │  Selenium │   │  API v3    │
+              └─────────┬──┘   └────────┬──┘   └─────────┬──┘
+                        │  (cada uno guarda su JSON)      │
+                        └──────────────┬─────────────────┘
+                                       ▼
+                          src/consolidar.py
+                (une los tres JSON en un dataset unificado)
+                                       ▼
+                         datos/dataset_<fecha>.json
 ```
 
-La abstracción **`ExtractorBase`** hace que cada red devuelva `Registro`
-homogéneos; el controlador las trata por igual (polimorfismo) y
-`extraer_seguro()` aísla fallos (si una red falla o no tiene sesión iniciada,
-las otras continúan).
+### Archivos
 
----
-
-## 5. Implementación de la extracción paralela _(rúbrica: 1.2)_
-
-Núcleo en [`src/controlador.py`](src/controlador.py). Las tres redes se procesan
-**al mismo tiempo**:
-
-1. **Pool de hilos** (`concurrent.futures.ThreadPoolExecutor`): un hilo por red,
-   cada uno **productor** que scrapea su red (navegador Selenium propio), limpia
-   y normaliza los textos y empuja los `Registro` a una cola.
-2. **Cola segura** (`queue.Queue`): canal thread-safe entre los extractores y un
-   **consumidor** central (patrón **Productor/Consumidor**).
-3. **Aislamiento de fallos** (`extraer_seguro`): un error en una red no detiene
-   a las demás.
-
-En los logs de [`evidencias/`](evidencias/) se observa que los tres hilos
-arrancan concurrentemente (`Extractor_0`, `Extractor_1`…).
-
----
-
-## 6. Justificación de la técnica de paralelismo _(rúbrica: 0.7)_
-
-**Se eligieron HILOS (threads), no procesos.**
-
-El trabajo de cada fuente es **I/O-bound**: dominado por la **espera de red** del
-navegador (cargar la página de búsqueda, esperar resultados, hacer scroll). En
-ese perfil:
-
-- Con **hilos**, mientras el navegador de una red espera la red, Python
-  **libera el GIL** y el hilo de otra red avanza: las esperas se **solapan** y el
-  tiempo total tiende al de la red más lenta, no a la suma. Además comparten
-  memoria, ideal para volcar todo a una cola común.
-- Con **procesos** pagaríamos creación de procesos y **serialización** de datos
-  sin beneficio, porque el cuello de botella es la red, no la CPU (los procesos
-  convienen en tareas *CPU-bound*).
-
-Se añaden **colas** porque la consigna pide comunicar los datos entre los
-extractores y un controlador central; `queue.Queue` es la estructura segura para
-hilos que lo resuelve. El **pool** administra el ciclo de vida de los hilos.
-
-Con `python main.py --benchmark` se mide el *speedup* (tiempo secuencial ÷
-paralelo): al solapar las esperas de red de los tres navegadores, la corrida
-paralela es notablemente más rápida que hacerlas una tras otra.
-
----
-
-## 7. Preparar la sesión (paso obligatorio la primera vez)
-
-Los scrapers usan tu sesión iniciada. Antes de la primera corrida, inicia sesión
-manualmente en cada red (se guarda en el perfil y se reutiliza):
-
-```bash
-python3 preparar_sesion.py x          # abre Chrome, inicia sesión en X, ENTER
-python3 preparar_sesion.py facebook   # ídem para Facebook
-python3 preparar_sesion.py tiktok     # ídem para TikTok
+```
+main.py                     # punto de entrada (con opción de análisis de sentimientos)
+src/
+  main.py                   # entrada mínima: solo la extracción paralela
+  controlador.py            # ejecuta los scrapers en hilos + consolida
+  gestor_login.py           # coordina los logins manuales entre hilos
+  scraper_facebook.py       # scraper Selenium de Facebook (publicaciones + comentarios)
+  scraper_tiktok.py         # scraper Selenium de TikTok (videos + comentarios)
+  scraper_youtube.py        # extractor de YouTube por API oficial
+  consolidar.py             # une los JSON por fuente en un dataset unificado
+datos/                      # datasets generados (JSON por fuente + combinado)
 ```
 
-La sesión queda almacenada en `.perfil_navegador/<red>` (no versionado). No se
-guardan usuarios ni contraseñas en el proyecto: sólo las cookies del navegador.
+---
 
-> ⚠️ Automatizar una cuenta puede infringir los Términos de Servicio de la red.
-> Úsese con fines académicos y, de preferencia, con una cuenta secundaria.
+## Paralelismo: hilos y justificación
+
+La extracción de las tres fuentes se ejecuta **al mismo tiempo** en
+[`src/controlador.py`](src/controlador.py) con un `ThreadPoolExecutor`: un hilo
+por fuente.
+
+**Se eligieron hilos (threads), no procesos**, porque el trabajo es
+**I/O-bound**: cada scraper pasa la mayor parte del tiempo esperando al navegador
+o a la red (cargar páginas, hacer scroll, esperar respuestas de la API), no
+calculando. Con hilos, mientras una fuente espera, Python libera el GIL y otro
+hilo avanza: las esperas se **solapan** y el tiempo total tiende al de la fuente
+más lenta, no a la suma de las tres. Además, los hilos comparten memoria, lo que
+permite compartir el `GestorLogin` sin coste de serialización. Los procesos
+convendrían si el cuello de botella fuera la CPU, que no es el caso aquí.
+
+### Bloqueo coordinado de los logins
+
+Facebook y TikTok necesitan que el usuario inicie sesión a mano y presione ENTER
+en la terminal. Si dos hilos pidieran el login al mismo tiempo, competirían por
+la entrada estándar y por la atención del usuario. Para evitarlo,
+[`src/gestor_login.py`](src/gestor_login.py) implementa un **GestorLogin**
+compartido por todos los hilos, con dos mecanismos:
+
+- Un **Lock** garantiza que solo un hilo hace login a la vez.
+- Un **Event** compartido hace que, mientras un hilo está en el login, **los
+  demás hilos se bloqueen** al llegar a sus puntos de control, y se reanuden
+  automáticamente cuando el login termina.
+
+Así, cada vez que alguna red necesita iniciar sesión, el resto de la extracción
+se pausa hasta que esa sesión esté lista, y luego todo continúa en paralelo.
 
 ---
 
-## 8. Almacenamiento y trazabilidad _(rúbrica: 0.5)_
+## Almacenamiento y trazabilidad
 
-[`src/almacenamiento.py`](src/almacenamiento.py) guarda los resultados en
-**JSON** con marca de tiempo en [`datos/`](datos/): un **dataset combinado**
-(`dataset_<fecha>.json`) y **un archivo por red** (`x_twitter_<fecha>.json`, …).
-Cada `Registro` ([`src/modelos.py`](src/modelos.py)) conserva:
+Cada scraper guarda su propio JSON en [`datos/`](datos/)
+(`facebook_publicaciones.json`, `tiktok_publicaciones.json`,
+`youtube_publicaciones.json`). Al terminar,
+[`src/consolidar.py`](src/consolidar.py) los une en un **dataset unificado**
+`dataset_<fecha>.json`, donde cada publicación y cada comentario se convierte en
+un registro plano y trazable:
 
 | Campo | Descripción |
 |-------|-------------|
-| `fuente` | Red social de origen (X / Facebook / TikTok) |
-| `consulta` | Palabra clave, hashtag o página que originó el registro |
-| `texto` | Contenido textual limpio (sin HTML) |
+| `fuente` | Red social de origen (Facebook / TikTok / YouTube) |
+| `consulta` | Tema o criterio de búsqueda que originó el registro |
+| `texto` | Contenido textual (publicación o comentario) |
 | `autor`, `fecha_publicacion`, `url` | Metadatos |
-| `metricas` | Interacción: likes, comentarios, compartidos, vistas |
+| `metricas` | Interacción disponible (likes, comentarios, vistas) |
 | `id_unico`, `extraido_en` | Deduplicación y sello temporal |
 
-Se **deduplica** por `id_unico`.
+Los registros se **deduplican** por `id_unico`.
 
 ---
 
-## 9. Evidencia de ejecución y dataset _(rúbrica: 0.4)_
+## Relación con el proyecto final
 
-- Dataset generado: carpeta [`datos/`](datos/) (JSON combinado + JSON por red).
-- Log de cada corrida: carpeta [`evidencias/`](evidencias/) (muestra los tres
-  hilos iniciando concurrentemente).
-
----
-
-## 10. Relación con el proyecto final _(rúbrica: 0.2)_
-
-El campo `texto` es la **materia prima** del proyecto final de **análisis de
+El campo `texto` es la materia prima del proyecto final de **análisis de
 sentimientos**: sobre esos textos se clasificará la polaridad (a favor / en
-contra / neutro). `fuente` permite **comparar el sentimiento entre X, Facebook y
-TikTok**; `metricas` permite **ponderar** por relevancia; y `fecha_publicacion`
-habilita el análisis temporal de la controversia y el *storytelling* final.
+contra / neutro). El campo `fuente` permite comparar el sentimiento entre
+Facebook, TikTok y YouTube, y `metricas` permite ponderar por relevancia.
 
 ---
 
 ## Cómo ejecutar
 
-Requiere **Python 3.9+**, **Google Chrome** y Selenium.
+Requiere **Python 3.9+**, **Google Chrome** y las dependencias del proyecto.
 
 ```bash
 # 1) Entorno e instalación
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2) Iniciar sesión en cada red (una vez; ver §7)
-python3 preparar_sesion.py x
-python3 preparar_sesion.py facebook
-python3 preparar_sesion.py tiktok
+# 2) Clave de la API de YouTube en un archivo .env
+#    YOUTUBE_API_KEY=tu_clave
 
 # 3) Ejecutar la extracción paralela
-python3 main.py               # scraping paralelo + guardado del dataset JSON
-python3 main.py --benchmark   # además compara secuencial vs paralelo (speedup)
-python3 main.py --secuencial  # sólo modo secuencial (referencia)
+python3 -m src.main       # solo extracción + consolidación
+python3 main.py           # extracción paralela + (opcional) análisis de sentimientos
 ```
 
-> Para pruebas sin ventana: `HEADLESS=1 python3 main.py` (las redes detectan el
-> modo headless, úsalo sólo para depurar).
-
-## Estructura del proyecto
-
-```
-main.py                     # punto de entrada (CLI)
-preparar_sesion.py          # login manual por red (guarda sesión en el perfil)
-src/
-  navegador.py              # fábrica de Chrome+Selenium (perfil persistente, stealth)
-  config.py                 # contexto, problemática, estrategia, parámetros Selenium
-  modelos.py                # Registro (modelo unificado + trazabilidad)
-  utilidades.py             # limpieza de texto, logging
-  controlador.py            # núcleo PARALELO: pool de hilos + cola
-  almacenamiento.py         # guardado JSON (combinado + por red) + deduplicación
-  extractores/
-    base.py                 # ExtractorBase (contrato común)
-    twitter_x.py            # scraper Selenium de X
-    facebook.py             # scraper Selenium de Facebook
-    tiktok.py               # scraper Selenium de TikTok
-datos/                      # datasets generados (JSON)
-evidencias/                 # logs de cada ejecución
-```
+Durante la corrida, cuando Facebook o TikTok abran Chrome, inicia sesión
+manualmente y presiona ENTER en la terminal; mientras tanto los demás hilos
+esperan. Ejecuta el comando desde la raíz del proyecto para que las rutas de
+salida (`datos/`) sean correctas.

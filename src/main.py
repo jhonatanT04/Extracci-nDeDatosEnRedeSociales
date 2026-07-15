@@ -1,15 +1,8 @@
-from src.consolidar import consolidar
-from src.scraper_facebook import ScraperFacebook
-from src.scraper_tiktok import ScraperTikTok
-from src.scraper_youtube import ScraperYouTube
+from src.controlador import ejecutar_paralelo
 
 
 def main():
-    ScraperFacebook().ejecutar()
-    # ScraperTikTok().ejecutar()
-    # ScraperYouTube().ejecutar()
-
-    # consolidar()
+    ejecutar_paralelo()
 
 
 if __name__ == "__main__":

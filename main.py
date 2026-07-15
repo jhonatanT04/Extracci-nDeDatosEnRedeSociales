@@ -2,10 +2,7 @@ import argparse
 import os
 import sys
 
-from consolidar import consolidar
-from scraper_facebook import ScraperFacebook
-from scraper_tiktok import ScraperTikTok
-from scraper_youtube import ScraperYouTube
+from src.controlador import ejecutar_paralelo
 
 
 def main():
@@ -42,10 +39,8 @@ def main():
 
     ruta_dataset = None
     if not args.solo_sentimientos:
-        ScraperFacebook().ejecutar()
-        ScraperTikTok().ejecutar()
-        ScraperYouTube().ejecutar()
-        ruta_dataset = consolidar()
+        # Extracción de las tres fuentes en paralelo (hilos) + consolidación.
+        ruta_dataset = ejecutar_paralelo()
 
     if args.sentimientos or args.solo_sentimientos:
         # Importar y ejecutar el flujo de Práctica 07
