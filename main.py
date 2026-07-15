@@ -1,8 +1,10 @@
 from scraper_facebook import ScraperFacebook
+from scraper_tiktok import ScraperTikTok
 
 
 def main():
-    scraper = ScraperFacebook()
+    # scraper = ScraperFacebook()
+    scraper = ScraperTikTok()
     scraper.ejecutar()
 
 
