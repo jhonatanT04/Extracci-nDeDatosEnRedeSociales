@@ -3,7 +3,7 @@ Controlador de análisis de sentimientos PARALELO (Práctica 07).
 
 Técnica de paralelismo y su justificación
 ------------------------------------------
-Clasificar un texto implica una llamada HTTP a la API de Groq: es una tarea
+Clasificar un texto implica una llamada HTTP a la API de OpenAI: es una tarea
 E/S-bound (se espera la respuesta de red), igual que la extracción de la
 Práctica 06. Por eso se reutiliza el mismo patrón:
 
@@ -25,26 +25,40 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from modelo import AnalizadorSentimientoGroq
+from modelo import crear_analizador
 
-from .modelos_sentimiento import RegistroSentimiento
-from .utilidades import log
+from modelos_sentimiento import RegistroSentimiento
+from utilidades import log
 
 _FIN = object()
 
 
 class ControladorSentimientos:
-    def __init__(self, analizador: AnalizadorSentimientoGroq | None = None):
-        self.analizador = analizador or AnalizadorSentimientoGroq()
+    def __init__(self, analizador=None, proveedor: str = "groq"):
+        """Inicializa el controlador con un analizador dado o lo crea.
+
+        Args:
+            analizador: instancia de AnalizadorSentimientoGroq o OpenAI.
+                        Si es None, se crea uno con `crear_analizador(proveedor)`.
+            proveedor: 'groq' o 'openai'. Sólo se usa si analizador es None.
+        """
+        self.analizador = analizador or crear_analizador(proveedor)
 
     @staticmethod
     def _agrupar_por_fuente(registros: list[dict]) -> dict[str, list[dict]]:
+        """Divide el corpus en bloques, uno por red social (fuente).
+
+        Esto permite que cada hilo procese todos los textos de su fuente,
+        cumpliendo con el requerimiento de 'clasificar sentimientos por
+        fuente de información' y 'dividir el corpus en bloques de datos'.
+        """
         bloques: dict[str, list[dict]] = {}
         for r in registros:
             bloques.setdefault(r["fuente"], []).append(r)
         return bloques
 
     def _clasificar_registro(self, r: dict) -> RegistroSentimiento:
+        """Clasifica un registro individual llamando al modelo de OpenAI."""
         resultado = self.analizador.clasificar(r["texto"])
         return RegistroSentimiento(
             fuente=r["fuente"],
@@ -66,12 +80,27 @@ class ControladorSentimientos:
     def ejecutar_paralelo(
         self, registros: list[dict]
     ) -> tuple[list[RegistroSentimiento], float]:
+        """Ejecuta la clasificación de sentimientos en modo PARALELO.
+
+        Arquitectura:
+        - Se agrupan los registros por fuente (red social).
+        - Se crea un hilo PRODUCTOR por cada fuente, que clasifica sus textos
+          llamando a la API de OpenAI y empuja los resultados a una cola.
+        - Un hilo CONSUMIDOR drena la cola y recolecta los resultados.
+        - El pool de hilos (`ThreadPoolExecutor`) administra el ciclo de vida.
+
+        Como cada clasificación es una llamada HTTP (I/O-bound), los hilos
+        permiten que las esperas de red se solapen: mientras un hilo espera
+        la respuesta de OpenAI, Python libera el GIL y otro hilo avanza.
+        """
         bloques = self._agrupar_por_fuente(registros)
         cola: "queue.Queue" = queue.Queue()
         resultados: list[RegistroSentimiento] = []
         n_bloques = len(bloques)
 
         def consumidor():
+            """Hilo consumidor: drena la cola hasta recibir N señales de FIN
+            (una por cada hilo productor)."""
             terminados = 0
             while terminados < n_bloques:
                 item = cola.get()
@@ -87,6 +116,8 @@ class ControladorSentimientos:
         hilo_consumidor.start()
 
         def productor(fuente: str, bloque: list[dict]):
+            """Hilo productor: clasifica todos los textos de una fuente y
+            los empuja a la cola compartida."""
             log.info("Clasificando %d textos de %s...", len(bloque), fuente)
             for r in bloque:
                 cola.put(self._clasificar_registro(r))
@@ -112,6 +143,11 @@ class ControladorSentimientos:
     def ejecutar_secuencial(
         self, registros: list[dict]
     ) -> tuple[list[RegistroSentimiento], float]:
+        """Ejecuta la clasificación en modo SECUENCIAL (sin hilos).
+
+        Existe solo para medir el speedup con --benchmark: el mismo trabajo
+        se hace uno por uno, y se compara el tiempo con el modo paralelo.
+        """
         inicio = time.perf_counter()
         resultados = [self._clasificar_registro(r) for r in registros]
         duracion = time.perf_counter() - inicio

@@ -12,3 +12,7 @@ __pycache__/
 
 # Sistema
 .DS_Store
+
+# Resultados de análisis generados automáticamente
+datos/sentimientos_*.json
+practica7/datos/sentimientos_*.json

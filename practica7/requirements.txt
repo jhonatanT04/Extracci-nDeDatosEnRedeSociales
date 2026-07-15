@@ -1,0 +1,8 @@
+# Dependencias de la Práctica 07 — Análisis paralelo de sentimientos (OpenAI)
+# ---------------------------------------------------------------------------
+# El sistema usa la librería estándar de Python 3.9+ para el paralelismo
+# (threading, queue, concurrent.futures) y requests + python-dotenv para
+# la comunicación con la API de OpenAI.
+
+requests>=2.32.5
+python-dotenv>=1.0.1

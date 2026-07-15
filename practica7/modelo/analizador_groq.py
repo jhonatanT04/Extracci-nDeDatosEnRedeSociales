@@ -9,7 +9,7 @@ Se eligió una API de LLM (en vez de un modelo local) porque:
     negaciones) que un clasificador léxico simple.
 
 La llamada a la API es E/S (se espera la respuesta de red), por eso el
-CONTROLADOR (`src/controlador_sentimientos.py`) la paraleliza con HILOS,
+CONTROLADOR (`controlador_sentimientos.py`) la paraleliza con HILOS,
 igual que la extracción de la Práctica 06.
 """
 
@@ -43,6 +43,7 @@ _SYSTEM_PROMPT = (
 
 @dataclass
 class ResultadoSentimiento:
+    """Resultado de clasificación de sentimiento (compartido por ambos proveedores)."""
     sentimiento: str
     justificacion: str
     modelo: str
@@ -73,6 +74,12 @@ class AnalizadorSentimientoGroq:
         self.max_reintentos = max_reintentos
 
     def clasificar(self, texto: str) -> ResultadoSentimiento:
+        """Clasifica el sentimiento de un texto usando la API de Groq.
+
+        Envía el texto al modelo Llama con un prompt de sistema que le indica
+        las categorías válidas y el formato JSON de respuesta. Maneja
+        reintentos ante rate-limit (429) y errores de red.
+        """
         payload = {
             "model": self.modelo,
             "temperature": self.temperatura,
