@@ -20,12 +20,14 @@ class ScraperFacebook:
     def __init__(
         self,
         busqueda="museo nacional del ecuador",
-        scrolls_feed=50,
-        max_rondas_comentarios=50,
+        scrolls_feed=5,
+        max_publicaciones=20,
+        max_rondas_comentarios=5,
         archivo_salida="datos/facebook_publicaciones.json",
     ):
         self.busqueda = busqueda
         self.scrolls_feed = scrolls_feed
+        self.max_publicaciones = max_publicaciones
         self.max_rondas_comentarios = max_rondas_comentarios
         self.archivo_salida = archivo_salida
         self.username = os.getenv("FACEBOOK_USER", "")
@@ -44,12 +46,6 @@ class ScraperFacebook:
 
     def iniciar_sesion(self):
         self.driver.get("https://www.facebook.com/")
-
-        input("ENTER para continuar... ")
-
-        self.driver.find_element(
-            By.XPATH, '//div[@role="button" and @aria-label="Iniciar sesión"]'
-        ).click()
 
         input("Inicia sesión en Facebook y presiona ENTER para continuar... ")
 
@@ -117,13 +113,13 @@ class ScraperFacebook:
                 '//div[@role="button" and @aria-haspopup="menu"]'
                 '[.//span[contains(text(), "relevantes") or contains(text(), "recientes")]]',
             )
-            filtro.click()
+            self.driver.execute_script("arguments[0].click();", filtro)
             sleep(2)
             opcion = self.driver.find_element(
                 By.XPATH,
                 '//div[@role="menuitem"][.//span[contains(text(), "Todos los comentarios")]]',
             )
-            opcion.click()
+            self.driver.execute_script("arguments[0].click();", opcion)
             sleep(3)
         except Exception:
             print("  (no se pudo cambiar el filtro de comentarios, sigo con el actual)")
@@ -144,7 +140,7 @@ class ScraperFacebook:
                 '//div[@role="button"][.//span[contains(text(), "Ver más comentarios")]]',
             ):
                 try:
-                    boton.click()
+                    self.driver.execute_script("arguments[0].click();", boton)
                     sleep(2)
                 except Exception:
                     pass
@@ -185,9 +181,10 @@ class ScraperFacebook:
 
     def cerrar_dialogo(self):
         try:
-            self.driver.find_element(
+            cerrar = self.driver.find_element(
                 By.XPATH, '//div[@role="button" and @aria-label="Cerrar"]'
-            ).click()
+            )
+            self.driver.execute_script("arguments[0].click();", cerrar)
             sleep(2)
         except Exception:
             webdriver.ActionChains(self.driver).send_keys(Keys.ESCAPE).perform()
@@ -197,28 +194,23 @@ class ScraperFacebook:
     # Recorrido de publicaciones
     # ------------------------------------------------------------------
     def extraer_publicaciones(self):
+        """Recorre el feed de forma incremental: procesa cada publicación con
+        botón 'Comentar' que no se haya visto, y cuando no quedan nuevas a la
+        vista, scrollea para cargar más. Así se cruzan los bloques de
+        sugerencias ('Páginas', 'Personas', etc.) —que no tienen botón de
+        comentar— y se sigue guardando las publicaciones que vienen después.
+        La deduplicación es por autor+descripción porque el feed se re-renderiza
+        (virtualización) y los índices anteriores quedan obsoletos."""
         xpath_boton = '//div[@role="button" and starts-with(@aria-label, "Comentar")]'
-        total_botones = len(self.driver.find_elements(By.XPATH, xpath_boton))
-        print(f"Publicaciones con botón de comentar: {total_botones}")
+        procesados = set()
+        scrolls_sin_nuevos = 0
 
-        for i in range(total_botones):
-            # El feed se re-renderiza con cada scroll y al cerrar el diálogo
-            # (virtualización), dejando obsoletas las referencias anteriores.
-            # Por eso todo se vuelve a buscar en cada intento.
-            exito = False
-            autor = descripcion = ""
-            for _ in range(50):
-                botones = self.driver.find_elements(By.XPATH, xpath_boton)
-                if i >= len(botones):
-                    break
-                boton = botones[i]
+        while (scrolls_sin_nuevos < self.scrolls_feed
+               and len(self.publicaciones) < self.max_publicaciones):
+            objetivo = None
+            autor = descripcion = clave = ""
+            for boton in self.driver.find_elements(By.XPATH, xpath_boton):
                 try:
-                    self.driver.execute_script(
-                        "arguments[0].scrollIntoView({block: 'center'});", boton
-                    )
-                    sleep(2)
-                    # En el feed de búsqueda cada publicación va envuelta en un
-                    # div con aria-posinset (ahí role="article" son comentarios).
                     articulo = boton.find_element(
                         By.XPATH, './ancestor::div[@aria-posinset][1]'
                     )
@@ -227,17 +219,37 @@ class ScraperFacebook:
                     if not autor:
                         etiqueta = boton.get_attribute("aria-label") or ""
                         autor = etiqueta.removeprefix("Comentar la publicación de ")
-                    boton.click()
-                    exito = True
+                    clave = f"{autor}|{descripcion}"
+                    if clave in procesados:
+                        continue
+                    objetivo = boton
                     break
                 except StaleElementReferenceException:
-                    sleep(2)
+                    continue
 
-            if not exito:
-                print(f"\n[{i + 1}/{total_botones}] Publicación omitida (el feed se re-renderizó)")
+            # No hay publicaciones nuevas visibles: scrollear para cargar más.
+            if objetivo is None:
+                self.driver.execute_script("window.scrollBy(0, 2200);")
+                sleep(3)
+                scrolls_sin_nuevos += 1
+                continue
+            scrolls_sin_nuevos = 0
+            procesados.add(clave)
+
+            try:
+                self.driver.execute_script(
+                    "arguments[0].scrollIntoView({block: 'center'});", objetivo
+                )
+                sleep(2)
+                # Facebook superpone una capa transparente (role="none",
+                # data-visualcompletion="ignore") sobre el botón, que intercepta
+                # el .click() nativo; el clic por JavaScript se dispara directo
+                # sobre el elemento y sí abre los comentarios.
+                self.driver.execute_script("arguments[0].click();", objetivo)
+            except StaleElementReferenceException:
                 continue
 
-            print(f"\n[{i + 1}/{total_botones}] Autor: {autor}")
+            print(f"\n[{len(self.publicaciones) + 1}] Autor: {autor}")
             print("Descripción:", descripcion[:120], "...")
             sleep(4)
 
@@ -253,6 +265,8 @@ class ScraperFacebook:
                 "texto": descripcion,
                 "comentarios": comentarios,
             })
+
+        print(f"\nTotal de publicaciones extraídas: {len(self.publicaciones)}")
 
     # ------------------------------------------------------------------
     # Salida
@@ -271,7 +285,6 @@ class ScraperFacebook:
         try:
             self.iniciar_sesion()
             self.buscar()
-            self.scrollear_feed()
             self.extraer_publicaciones()
             self.guardar()
         finally:
