@@ -1,0 +1,14 @@
+# Secretos (API keys) — NUNCA subir a git
+.env
+
+# Sesiones de navegador guardadas (cookies de login real)
+.perfil_navegador/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Sistema
+.DS_Store

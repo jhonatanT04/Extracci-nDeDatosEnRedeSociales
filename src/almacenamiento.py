@@ -53,6 +53,38 @@ def _nombre_seguro(texto: str) -> str:
     return "".join(c if c.isalnum() else "_" for c in texto).strip("_").lower()
 
 
+def listar_datasets() -> list[str]:
+    """Rutas de los datasets combinados disponibles, del más viejo al más
+    reciente (por fecha de modificación)."""
+    if not os.path.isdir(config.DIR_DATOS):
+        return []
+    archivos = [
+        os.path.join(config.DIR_DATOS, f)
+        for f in os.listdir(config.DIR_DATOS)
+        if f.startswith("dataset_") and f.endswith(".json")
+    ]
+    return sorted(archivos, key=os.path.getmtime)
+
+
+def cargar_dataset(ruta: str | None = None) -> dict:
+    """
+    Carga un dataset combinado generado por `guardar()` (Práctica 06), para
+    usarlo como entrada del análisis de sentimientos (Práctica 07).
+    Si no se especifica ruta, toma el más reciente en datos/.
+    """
+    if ruta is None:
+        disponibles = listar_datasets()
+        if not disponibles:
+            raise FileNotFoundError(
+                f"No hay ningún 'dataset_*.json' en {config.DIR_DATOS}/. "
+                "Corre primero la Práctica 06 (python3 main.py) o usa el "
+                "dataset de prueba con --archivo datos/dataset_prueba.json"
+            )
+        ruta = disponibles[-1]
+    with open(ruta, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def guardar(registros: list[Registro]) -> dict:
     """
     Guarda el dataset combinado y un archivo JSON por red.

@@ -1,0 +1,355 @@
+{
+  "problematica": "¿Cuál es la percepción de los usuarios de redes sociales sobre el diseño ganador ('Ecos del Sol') del nuevo Museo Nacional del Ecuador?",
+  "generado_en": "2026-07-14T21:05:10.648610",
+  "total_registros": 18,
+  "resumen_por_fuente": {
+    "Facebook": {
+      "negativo": 3,
+      "positivo": 1,
+      "neutral": 2
+    },
+    "X-Twitter": {
+      "negativo": 2,
+      "positivo": 1,
+      "neutral": 2,
+      "mixto": 1
+    },
+    "TikTok": {
+      "positivo": 2,
+      "neutral": 2,
+      "negativo": 2
+    }
+  },
+  "registros": [
+    {
+      "fuente": "Facebook",
+      "consulta": "Ecos del Sol museo",
+      "texto": "Como artista ecuatoriano me siento decepcionado, el diseño no cuenta nuestra historia, parece copiado de otro continente.",
+      "id_unico": "prueba_fb_001",
+      "autor": "Marco Salinas",
+      "fecha_publicacion": "2026-06-10T16:00:00",
+      "url": "https://facebook.com/posts/prueba_fb_001",
+      "metricas": {
+        "likes": 145,
+        "comentarios": 60,
+        "compartidos": 25
+      },
+      "sentimiento": "negativo",
+      "justificacion": "Critica el diseño y lo considera copiado",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:08.803531+00:00"
+    },
+    {
+      "fuente": "X-Twitter",
+      "consulta": "Ecos del Sol museo",
+      "texto": "Qué vergüenza el diseño 'Ecos del Sol', no representa en nada nuestra identidad cultural. Parece sacado de otro país.",
+      "id_unico": "prueba_x_001",
+      "autor": "@arquitecta_ec",
+      "fecha_publicacion": "2026-06-10T14:32:00",
+      "url": "https://x.com/arquitecta_ec/status/prueba001",
+      "metricas": {
+        "likes": 320,
+        "comentarios": 48,
+        "compartidos": 90
+      },
+      "sentimiento": "negativo",
+      "justificacion": "Critica el diseño de 'Ecos del Sol' por no representar la identidad cultural",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:08.822050+00:00"
+    },
+    {
+      "fuente": "TikTok",
+      "consulta": "Ecos del Sol museo",
+      "texto": "Jajaja de verdad ese es el diseño ganador? parece un centro comercial con nombre bonito #EcosDelSol",
+      "id_unico": "prueba_tt_001",
+      "autor": "@culturaviral_ec",
+      "fecha_publicacion": "2026-06-10T20:15:00",
+      "url": "https://tiktok.com/@culturaviral_ec/video/prueba001",
+      "metricas": {
+        "likes": 15400,
+        "comentarios": 890,
+        "compartidos": 2100,
+        "vistas": 210000
+      },
+      "sentimiento": "positivo",
+      "justificacion": "El tono es irónico y humorístico, lo que sugiere aprobación",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:08.828863+00:00"
+    },
+    {
+      "fuente": "Facebook",
+      "consulta": "#NuevoMuseoNacional",
+      "texto": "Excelente iniciativa, por fin un museo digno para nuestro patrimonio. Ojalá se construya pronto tal cual el diseño.",
+      "id_unico": "prueba_fb_002",
+      "autor": "Diana Cevallos",
+      "fecha_publicacion": "2026-06-10T19:22:00",
+      "url": "https://facebook.com/posts/prueba_fb_002",
+      "metricas": {
+        "likes": 98,
+        "comentarios": 14,
+        "compartidos": 6
+      },
+      "sentimiento": "positivo",
+      "justificacion": "Aprueba la iniciativa del museo y expresa esperanza por su construcción",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:09.091489+00:00"
+    },
+    {
+      "fuente": "TikTok",
+      "consulta": "#MuseoNacionalDelEcuador",
+      "texto": "Yo sí lo apoyo, hay que dejar de criticar todo lo nuevo, se ve espectacular en el render oficial.",
+      "id_unico": "prueba_tt_002",
+      "autor": "@arqui.joven",
+      "fecha_publicacion": "2026-06-11T11:05:00",
+      "url": "https://tiktok.com/@arqui.joven/video/prueba002",
+      "metricas": {
+        "likes": 3200,
+        "comentarios": 150,
+        "compartidos": 60,
+        "vistas": 45000
+      },
+      "sentimiento": "positivo",
+      "justificacion": "Aprueba y felicita el nuevo diseño",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:09.107558+00:00"
+    },
+    {
+      "fuente": "X-Twitter",
+      "consulta": "#EcosDelSol",
+      "texto": "Me encanta el nuevo diseño del Museo Nacional, es moderno y le da un aire distinto a Quito. Felicito a los ganadores.",
+      "id_unico": "prueba_x_002",
+      "autor": "@quiteño_orgulloso",
+      "fecha_publicacion": "2026-06-10T15:10:00",
+      "url": "https://x.com/quiteno_orgulloso/status/prueba002",
+      "metricas": {
+        "likes": 210,
+        "comentarios": 22,
+        "compartidos": 15
+      },
+      "sentimiento": "positivo",
+      "justificacion": "Aprueba y felicita el nuevo diseño del Museo Nacional",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:09.159438+00:00"
+    },
+    {
+      "fuente": "TikTok",
+      "consulta": "nuevo Museo Nacional del Ecuador",
+      "texto": "Aquí les resumo la línea de tiempo del concurso del museo y cómo llegamos hasta la polémica actual.",
+      "id_unico": "prueba_tt_003",
+      "autor": "@datoscurioso_ec",
+      "fecha_publicacion": "2026-06-11T16:50:00",
+      "url": "https://tiktok.com/@datoscurioso_ec/video/prueba003",
+      "metricas": {
+        "likes": 900,
+        "comentarios": 40,
+        "compartidos": 300,
+        "vistas": 30000
+      },
+      "sentimiento": "neutral",
+      "justificacion": "Informa sobre la línea de tiempo del concurso del museo sin tomar postura",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:09.430478+00:00"
+    },
+    {
+      "fuente": "X-Twitter",
+      "consulta": "nuevo Museo Nacional del Ecuador",
+      "texto": "El Gobierno anunció que se reunirá con los finalistas para revisar el proyecto del museo. Se espera un comunicado esta semana.",
+      "id_unico": "prueba_x_003",
+      "autor": "@noticiasec",
+      "fecha_publicacion": "2026-06-11T09:00:00",
+      "url": "https://x.com/noticiasec/status/prueba003",
+      "metricas": {
+        "likes": 40,
+        "comentarios": 5,
+        "compartidos": 30
+      },
+      "sentimiento": "neutral",
+      "justificacion": "El texto solo informa sobre una noticia sin tomar postura",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:09.480701+00:00"
+    },
+    {
+      "fuente": "Facebook",
+      "consulta": "Museo Nacional Ecuador diseño",
+      "texto": "El proceso de selección estuvo abierto al público y contó con jurado internacional, según el comunicado oficial.",
+      "id_unico": "prueba_fb_003",
+      "autor": "Diario La Región",
+      "fecha_publicacion": "2026-06-11T07:30:00",
+      "url": "https://facebook.com/posts/prueba_fb_003",
+      "metricas": {
+        "likes": 20,
+        "comentarios": 3,
+        "compartidos": 40
+      },
+      "sentimiento": "neutral",
+      "justificacion": "El texto solo informa hechos sin tomar postura",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:09.495292+00:00"
+    },
+    {
+      "fuente": "X-Twitter",
+      "consulta": "Museo Nacional Ecuador diseño",
+      "texto": "Tiene cosas buenas como la iluminación natural, pero la fachada no dialoga con el entorno histórico. Un diseño a medias.",
+      "id_unico": "prueba_x_004",
+      "autor": "@urbanista_uio",
+      "fecha_publicacion": "2026-06-11T18:45:00",
+      "url": "https://x.com/urbanista_uio/status/prueba004",
+      "metricas": {
+        "likes": 88,
+        "comentarios": 12,
+        "compartidos": 9
+      },
+      "sentimiento": "mixto",
+      "justificacion": "Critica la fachada pero menciona algo positivo",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:09.986096+00:00"
+    },
+    {
+      "fuente": "TikTok",
+      "consulta": "#EcosDelSol",
+      "texto": "Tiene buena intención pero la ejecución deja mucho que desear, esperaba algo más representativo de nuestras raíces.",
+      "id_unico": "prueba_tt_004",
+      "autor": "@critica_de_arte",
+      "fecha_publicacion": "2026-06-12T09:30:00",
+      "url": "https://tiktok.com/@critica_de_arte/video/prueba004",
+      "metricas": {
+        "likes": 1800,
+        "comentarios": 220,
+        "compartidos": 95,
+        "vistas": 60000
+      },
+      "sentimiento": "negativo",
+      "justificacion": "Critica la ejecución de un proyecto",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:09.987738+00:00"
+    },
+    {
+      "fuente": "Facebook",
+      "consulta": "nuevo Museo Nacional del Ecuador",
+      "texto": "Tiene un concepto interesante en la parte de sostenibilidad, pero la escala me parece exagerada para el sector.",
+      "id_unico": "prueba_fb_004",
+      "autor": "Jorge Andrade",
+      "fecha_publicacion": "2026-06-11T21:10:00",
+      "url": "https://facebook.com/posts/prueba_fb_004",
+      "metricas": {
+        "likes": 55,
+        "comentarios": 18,
+        "compartidos": 4
+      },
+      "sentimiento": "negativo",
+      "justificacion": "Critica la escala de sostenibilidad",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:09.989945+00:00"
+    },
+    {
+      "fuente": "X-Twitter",
+      "consulta": "#MuseoNacionalEcuador",
+      "texto": "Otra vez gastando millones en un elefante blanco. Mejor invertir en hospitales, ese diseño no le sirve a nadie.",
+      "id_unico": "prueba_x_005",
+      "autor": "@critico_publico",
+      "fecha_publicacion": "2026-06-12T08:20:00",
+      "url": "https://x.com/critico_publico/status/prueba005",
+      "metricas": {
+        "likes": 512,
+        "comentarios": 130,
+        "compartidos": 200
+      },
+      "sentimiento": "negativo",
+      "justificacion": "Critica el gasto en un proyecto",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:10.258453+00:00"
+    },
+    {
+      "fuente": "Facebook",
+      "consulta": "#EcosDelSol",
+      "texto": "Un despropósito total, no refleja para nada la cultura de los pueblos originarios. Deberían reconvocar el concurso ya.",
+      "id_unico": "prueba_fb_005",
+      "autor": "Comunidad Kitu Kara",
+      "fecha_publicacion": "2026-06-12T12:00:00",
+      "url": "https://facebook.com/posts/prueba_fb_005",
+      "metricas": {
+        "likes": 430,
+        "comentarios": 210,
+        "compartidos": 180
+      },
+      "sentimiento": "negativo",
+      "justificacion": "Critica el resultado del concurso por no reflejar la cultura de los pueblos originarios",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:10.306265+00:00"
+    },
+    {
+      "fuente": "TikTok",
+      "consulta": "Museo Nacional Ecuador diseño",
+      "texto": "No entiendo por qué tanto drama con un edificio, al final lo importante es lo que va adentro, las piezas del museo.",
+      "id_unico": "prueba_tt_005",
+      "autor": "@opinapues",
+      "fecha_publicacion": "2026-06-12T17:00:00",
+      "url": "https://tiktok.com/@opinapues/video/prueba005",
+      "metricas": {
+        "likes": 640,
+        "comentarios": 300,
+        "compartidos": 20,
+        "vistas": 22000
+      },
+      "sentimiento": "neutral",
+      "justificacion": "No toma postura, solo expresa una opinión sobre la importancia de lo que hay dentro del edificio.",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:10.338344+00:00"
+    },
+    {
+      "fuente": "X-Twitter",
+      "consulta": "diseño Museo Nacional Ecuador",
+      "texto": "¿Alguien tiene el link del proyecto completo? Quiero ver los planos antes de opinar.",
+      "id_unico": "prueba_x_006",
+      "autor": "@estudiante_arq",
+      "fecha_publicacion": "2026-06-12T10:05:00",
+      "url": "https://x.com/estudiante_arq/status/prueba006",
+      "metricas": {
+        "likes": 6,
+        "comentarios": 2,
+        "compartidos": 0
+      },
+      "sentimiento": "neutral",
+      "justificacion": "Pide información sin tomar postura",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:10.568600+00:00"
+    },
+    {
+      "fuente": "TikTok",
+      "consulta": "diseño Museo Nacional Ecuador",
+      "texto": "Vergonzoso, gastar tanto dinero público en un diseño que ni conecta con la gente. Total rechazo desde ya.",
+      "id_unico": "prueba_tt_006",
+      "autor": "@vozciudadana",
+      "fecha_publicacion": "2026-06-13T08:10:00",
+      "url": "https://tiktok.com/@vozciudadana/video/prueba006",
+      "metricas": {
+        "likes": 22000,
+        "comentarios": 1500,
+        "compartidos": 4300,
+        "vistas": 380000
+      },
+      "sentimiento": "negativo",
+      "justificacion": "Critica el diseño y rechaza la inversión de dinero público",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:10.635457+00:00"
+    },
+    {
+      "fuente": "Facebook",
+      "consulta": "diseño Museo Nacional Ecuador",
+      "texto": "¿A qué hora es la rueda de prensa de hoy sobre el museo? No encuentro la transmisión en vivo.",
+      "id_unico": "prueba_fb_006",
+      "autor": "Paola Rivas",
+      "fecha_publicacion": "2026-06-12T13:40:00",
+      "url": "https://facebook.com/posts/prueba_fb_006",
+      "metricas": {
+        "likes": 3,
+        "comentarios": 1,
+        "compartidos": 0
+      },
+      "sentimiento": "neutral",
+      "justificacion": "La pregunta es informativa y no expresa una opinión",
+      "modelo": "llama-3.1-8b-instant",
+      "clasificado_en": "2026-07-15T02:05:10.647671+00:00"
+    }
+  ]
+}

@@ -8,6 +8,13 @@ selenium>=4.20
 # El resto del sistema (controlador paralelo, almacenamiento) usa solo la
 # librería estándar de Python 3.9+ (json, threading, queue, concurrent.futures).
 #
+# Práctica 07 (análisis de sentimientos con la API gratuita de Groq):
+requests>=2.32.5
+python-dotenv>=1.0.1
+#
 # Instalación:
 #     python3 -m venv .venv && source .venv/bin/activate
 #     pip install -r requirements.txt
+#
+# Antes de correr main_sentimientos.py, pega tu clave gratuita de Groq
+# (https://console.groq.com/keys) en el archivo .env -> GROQ_API_KEY=...
