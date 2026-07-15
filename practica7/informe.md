@@ -41,6 +41,13 @@ Se adoptó un esquema de 5 categorías para reflejar fielmente el debate públic
 
 ## 3. Justificación de la Técnica de Paralelismo Utilizada
 
+### Estrategias de Paralelismo Aplicadas (Conforme a la Guía)
+De las estrategias sugeridas en las instrucciones de la práctica, nuestra implementación **aplica exactamente 4 de ellas en simultáneo**:
+1. **Dividir el corpus en bloques de datos:** El método `_agrupar_por_fuente()` particiona automáticamente todo el archivo de entrada (`dataset_prueba.json` o los consolidados) en bloques aislados por cada red social presente.
+2. **Procesar en paralelo los textos de cada red social:** Se asigna un hilo dedicado de trabajo concurrente por cada plataforma (Facebook, TikTok y X-Twitter), permitiendo que el análisis de las tres redes se ejecute al mismo tiempo.
+3. **Enviar lotes de textos a diferentes procesos o hilos:** Mediante `ThreadPoolExecutor`, se envía un lote completo de comentarios a cada hilo productor (`Sentimiento_0`, `Sentimiento_1`, `Sentimiento_2`), quienes realizan peticiones concurrentes a la API.
+4. **Clasificar sentimientos por fuente de información:** Tanto el procesamiento como el canal de sincronización en memoria compartida (`queue.Queue`) preservan el origen del dato, permitiendo un resumen segregado por fuente.
+
 ### ¿Por qué Hilos (`Thread` / `ThreadPoolExecutor`) y no Procesos (`Process`)?
 
 El procesamiento de cada texto requiere una petición HTTP a los servidores de OpenAI o Groq. Este tipo de carga de trabajo se clasifica estrictamente como **$I/O-Bound$ (limitado por entrada/salida y latencia de red)**, donde el procesador ($CPU$) pasa el 95% del tiempo en estado de espera activa o bloqueada aguardando la respuesta del servidor remoto.
