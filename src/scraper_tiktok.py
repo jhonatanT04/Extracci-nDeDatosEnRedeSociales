@@ -4,12 +4,11 @@ from time import monotonic, sleep
 from urllib.parse import quote
 
 from dotenv import load_dotenv
-from selenium import webdriver
 from selenium.common.exceptions import StaleElementReferenceException
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from webdriver_manager.chrome import ChromeDriverManager
+
+from src.navegador import crear_driver as crear_navegador
 
 load_dotenv()
 
@@ -47,10 +46,7 @@ class ScraperTikTok:
     # Navegador y sesión
     # ------------------------------------------------------------------
     def crear_driver(self):
-        service = Service(ChromeDriverManager().install())
-        option = webdriver.ChromeOptions()
-        option.add_argument("--window-size=1920,1080")
-        self.driver = webdriver.Chrome(service=service, options=option)
+        self.driver = crear_navegador("tiktok")
 
     def iniciar_sesion(self):
         self.driver.get("https://www.tiktok.com/")
