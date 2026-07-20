@@ -25,6 +25,7 @@ class ScraperTikTok:
         max_rondas_comentarios=10,
         max_segundos_comentarios=10,
         archivo_salida="datos/tiktok_publicaciones.json",
+        confirmar_login=None,
     ):
         self.busqueda = busqueda
         self.scrolls_resultados = scrolls_resultados
@@ -35,6 +36,10 @@ class ScraperTikTok:
         self.driver = None
         self.gestor = None
         self.publicaciones = []
+        # Callable sin argumentos que bloquea hasta confirmar el login. Por
+        # defecto usa input() en la terminal (CLI); la app web pasa uno que
+        # espera un threading.Event liberado desde el navegador.
+        self.confirmar_login = confirmar_login
 
     def _checkpoint(self):
         """Si otro hilo está iniciando sesión, se bloquea aquí hasta que
@@ -51,7 +56,10 @@ class ScraperTikTok:
     def iniciar_sesion(self):
         self.driver.get("https://www.tiktok.com/")
 
-        input("Inicia sesión en TikTok si hace falta y presiona ENTER para continuar... ")
+        if self.confirmar_login is not None:
+            self.confirmar_login()
+        else:
+            input("Inicia sesión en TikTok si hace falta y presiona ENTER para continuar... ")
 
     # ------------------------------------------------------------------
     # Búsqueda

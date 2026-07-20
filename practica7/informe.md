@@ -5,7 +5,9 @@
 
 **Asignatura:** Computación Paralela  
 **Institución:** Universidad Politécnica Salesiana (UPS)  
+**Autores:** Justin Lucero, Jhonatan Tacuri, Wilmer Merchán  
 **Caso de Estudio:** Percepción ciudadana sobre el diseño ganador *"Ecos del Sol"* del nuevo Museo Nacional del Ecuador (MUNA)  
+**Repositorio GitHub:** [https://github.com/jhonatanT04/Extracci-nDeDatosEnRedeSociales.git](https://github.com/jhonatanT04/Extracci-nDeDatosEnRedeSociales.git)  
 **Fecha:** Julio de 2026  
 
 ---

@@ -27,6 +27,7 @@ ARCHIVOS_FUENTES = [
     "datos/facebook_publicaciones.json",
     "datos/tiktok_publicaciones.json",
     "datos/youtube_publicaciones.json",
+    "datos/reddit_publicaciones.json",
 ]
 
 

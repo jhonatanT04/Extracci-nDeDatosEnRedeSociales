@@ -1,7 +1,7 @@
 """Controlador paralelo de la extracción.
 
-Ejecuta los scrapers de las tres fuentes (Facebook, TikTok, YouTube) en hilos
-concurrentes y, al terminar, consolida el dataset unificado.
+Ejecuta los scrapers de las cuatro fuentes (Facebook, TikTok, YouTube, Reddit)
+en hilos concurrentes y, al terminar, consolida el dataset unificado.
 
 ¿Por qué HILOS y no procesos? El trabajo es I/O-bound: cada scraper pasa la
 mayor parte del tiempo esperando al navegador o a la red, no calculando. Con
@@ -10,7 +10,8 @@ GestorLogin) sin coste de serialización entre procesos.
 
 Un GestorLogin compartido coordina los inicios de sesión manuales de los
 scrapers de Selenium: mientras uno pide login en la terminal, los demás hilos
-se bloquean para no competir por stdin.
+se bloquean para no competir por stdin. YouTube y Reddit usan API oficial
+(sin login), así que pasan por el checkpoint sin bloquear a nadie.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -18,29 +19,42 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.consolidar import consolidar
 from src.gestor_login import GestorLogin
 from src.scraper_facebook import ScraperFacebook
+from src.scraper_reddit import ScraperReddit
 from src.scraper_tiktok import ScraperTikTok
 from src.scraper_youtube import ScraperYouTube
 
 
-def _correr(scraper, gestor):
+def _correr(scraper, gestor, on_evento=None):
     """Ejecuta un scraper y devuelve (nombre, nº publicaciones, error)."""
     nombre = scraper.__class__.__name__
+    if on_evento:
+        on_evento("inicio", nombre)
     try:
         scraper.ejecutar(gestor)
+        if on_evento:
+            on_evento("fin", nombre, len(scraper.publicaciones))
         return (nombre, len(scraper.publicaciones), None)
     except Exception as exc:  # noqa: BLE001
+        if on_evento:
+            on_evento("error", nombre, str(exc))
         return (nombre, len(getattr(scraper, "publicaciones", [])), exc)
 
 
-def ejecutar_paralelo(scrapers=None, consolidar_al_final=True):
-    """Lanza los scrapers en paralelo (un hilo por fuente) y consolida."""
+def ejecutar_paralelo(scrapers=None, consolidar_al_final=True, on_evento=None):
+    """Lanza los scrapers en paralelo (un hilo por fuente) y consolida.
+
+    `on_evento(tipo, nombre, extra=None)` es opcional: si se pasa, se invoca
+    con ("inicio", nombre), ("fin", nombre, n_publicaciones) o
+    ("error", nombre, mensaje) a medida que avanza cada hilo. Lo usa la app
+    web para mostrar progreso en vivo sin acoplarse a los prints de CLI.
+    """
     if scrapers is None:
-        scrapers = [ScraperFacebook(), ScraperTikTok(), ScraperYouTube()]
+        scrapers = [ScraperFacebook(), ScraperTikTok(), ScraperYouTube(), ScraperReddit()]
     gestor = GestorLogin()
 
     print(f"Lanzando {len(scrapers)} extractores en paralelo (hilos)...\n")
     with ThreadPoolExecutor(max_workers=len(scrapers)) as pool:
-        futuros = [pool.submit(_correr, s, gestor) for s in scrapers]
+        futuros = [pool.submit(_correr, s, gestor, on_evento) for s in scrapers]
         for fut in as_completed(futuros):
             nombre, n, err = fut.result()
             if err is None:

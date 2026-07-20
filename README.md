@@ -1,12 +1,18 @@
-# Extracción Paralela de Datos en Redes Sociales — Museo Nacional del Ecuador
+# Análisis Paralelo de Redes Sociales — Museo Nacional del Ecuador
 
 **Asignatura:** Computación Paralela — Universidad Politécnica Salesiana (UPS)
-**Integrantes:** _(completar con los nombres del grupo)_
+**Integrantes:** Justin Lucero, Jhonatan Tacuri, Wilmer Merchán
 
-Sistema que extrae **en paralelo** opiniones publicadas en **Facebook, TikTok y
-YouTube** sobre el diseño ganador del nuevo Museo Nacional del Ecuador, y genera
-un dataset textual unificado con trazabilidad, listo para el análisis de
-sentimientos del proyecto final.
+Sistema que extrae **en paralelo** opiniones publicadas en **Facebook, TikTok,
+YouTube y Reddit** sobre el diseño ganador del nuevo Museo Nacional del
+Ecuador, las clasifica por sentimiento con un LLM (también en paralelo) y
+presenta los resultados —con exploración e interpretación narrativa
+(storytelling)— en una **aplicación web** de punta a punta.
+
+> **¿Buscas cómo correr el proyecto final completo (app web)?** Ve directo a
+> la sección [Proyecto Final: Aplicación Web](#proyecto-final-aplicación-web).
+> Lo que sigue abajo documenta la Práctica 06 (extracción por CLI), que la
+> app web reutiliza como motor de extracción.
 
 ---
 
@@ -33,13 +39,16 @@ identificar el sentimiento predominante y los principales temas de discusión.
 | **Facebook** | Los medios ecuatorianos publicaron la noticia y la ciudadanía opinó masivamente en los comentarios | Selenium sobre Chrome real (sesión iniciada por el usuario) |
 | **TikTok** | Contenido audiovisual y opinión de públicos jóvenes sobre la polémica | Selenium sobre Chrome real |
 | **YouTube** | Videos de noticias y análisis con debate extenso en los comentarios | API oficial (YouTube Data API v3) |
+| **Reddit** | Comunidades de arquitectura, urbanismo y foros ecuatorianos (r/Ecuador y similares) con debate textual extenso y votable | API oficial (OAuth "client_credentials", sin login de usuario) |
 
 Facebook y TikTok bloquean el scraping con librerías de terceros (imitan el
 tráfico y son detectadas fácilmente), por lo que se automatiza **Google Chrome
 real** con Selenium sobre una sesión que el usuario inicia manualmente: las
 peticiones salen de un navegador legítimo con cookies válidas y esquivan gran
-parte de la detección anti-bot. YouTube sí ofrece una **API oficial gratuita**,
-así que ahí no hace falta navegador ni login: basta una clave de API.
+parte de la detección anti-bot. YouTube y Reddit sí ofrecen una **API oficial
+gratuita**, así que ahí no hace falta navegador ni login: basta una clave de
+API (Reddit usa una app tipo "script" con `client_id`/`client_secret`, sin
+necesidad de una cuenta de usuario logueada).
 
 ---
 
@@ -68,19 +77,19 @@ qué criterio se localizó, para mantener la trazabilidad.
                                      │
                  ┌───────────────────▼────────────────────────┐
                  │        src/controlador.py                   │
-                 │   ThreadPoolExecutor (un hilo por fuente)   │
+                 │ ThreadPoolExecutor (un hilo por fuente)     │
                  │   + GestorLogin compartido                  │
-                 └──────┬───────────────┬───────────────┬──────┘
-             (hilo 1)   │    (hilo 2)   │    (hilo 3)    │
-              ┌─────────▼──┐   ┌────────▼──┐   ┌─────────▼──┐
-              │  Facebook  │   │  TikTok   │   │  YouTube   │
-              │  Selenium  │   │  Selenium │   │  API v3    │
-              └─────────┬──┘   └────────┬──┘   └─────────┬──┘
-                        │  (cada uno guarda su JSON)      │
-                        └──────────────┬─────────────────┘
+                 └──────┬───────────┬───────────┬───────────┬──┘
+             (hilo 1)   │  (hilo 2) │  (hilo 3) │  (hilo 4) │
+              ┌─────────▼──┐ ┌──────▼───┐ ┌─────▼─────┐ ┌───▼──────┐
+              │  Facebook  │ │  TikTok  │ │  YouTube  │ │  Reddit  │
+              │  Selenium  │ │ Selenium │ │  API v3   │ │   API    │
+              └─────────┬──┘ └──────┬───┘ └─────┬─────┘ └───┬──────┘
+                        │   (cada uno guarda su JSON)        │
+                        └──────────────┬──────────────────────┘
                                        ▼
                           src/consolidar.py
-                (une los tres JSON en un dataset unificado)
+                (une los cuatro JSON en un dataset unificado)
                                        ▼
                          datos/dataset_<fecha>.json
 ```
@@ -88,7 +97,8 @@ qué criterio se localizó, para mantener la trazabilidad.
 ### Archivos
 
 ```
-main.py                     # punto de entrada (con opción de análisis de sentimientos)
+main.py                     # punto de entrada CLI (con opción de análisis de sentimientos)
+webapp/                     # Proyecto Final: aplicación web de punta a punta (ver sección propia)
 src/
   main.py                   # entrada mínima: solo la extracción paralela
   controlador.py            # ejecuta los scrapers en hilos + consolida
@@ -96,6 +106,7 @@ src/
   scraper_facebook.py       # scraper Selenium de Facebook (publicaciones + comentarios)
   scraper_tiktok.py         # scraper Selenium de TikTok (videos + comentarios)
   scraper_youtube.py        # extractor de YouTube por API oficial
+  scraper_reddit.py         # extractor de Reddit por API oficial (OAuth client_credentials)
   consolidar.py             # une los JSON por fuente en un dataset unificado
 datos/                      # datasets generados (JSON por fuente + combinado)
 ```
@@ -146,7 +157,7 @@ un registro plano y trazable:
 
 | Campo | Descripción |
 |-------|-------------|
-| `fuente` | Red social de origen (Facebook / TikTok / YouTube) |
+| `fuente` | Red social de origen (Facebook / TikTok / YouTube / Reddit) |
 | `consulta` | Tema o criterio de búsqueda que originó el registro |
 | `texto` | Contenido textual (publicación o comentario) |
 | `autor`, `fecha_publicacion`, `url` | Metadatos |
@@ -162,11 +173,77 @@ Los registros se **deduplican** por `id_unico`.
 El campo `texto` es la materia prima del proyecto final de **análisis de
 sentimientos**: sobre esos textos se clasificará la polaridad (a favor / en
 contra / neutro). El campo `fuente` permite comparar el sentimiento entre
-Facebook, TikTok y YouTube, y `metricas` permite ponderar por relevancia.
+Facebook, TikTok, YouTube y Reddit, y `metricas` permite ponderar por
+relevancia.
 
 ---
 
-## Cómo ejecutar
+## Proyecto Final: Aplicación Web
+
+La entrega final integra de punta a punta la extracción (Práctica 06) y el
+análisis de sentimientos (Práctica 07) en una sola **aplicación web**
+(`webapp/`): el usuario escribe una consulta en el navegador, la app dispara
+la extracción concurrente de las 4 redes, clasifica el sentimiento en
+paralelo con un LLM, genera una interpretación narrativa (storytelling) y
+muestra todo en un dashboard interactivo — sin tocar la terminal salvo para
+levantar el servidor.
+
+### Arquitectura de la app web
+
+```
+Navegador (formulario de búsqueda + dashboard)
+        │  POST /api/buscar {consulta, fuentes, proveedor}
+        ▼
+webapp/server.py (FastAPI)
+        │  lanza un hilo de trabajo por job (no bloquea el servidor)
+        ▼
+src.controlador.ejecutar_paralelo()      ← Práctica 06 (4 hilos, uno por red)
+        │  Facebook/TikTok: si hace falta login, el job queda en estado
+        │  "login_pendiente" y el hilo espera un threading.Event que la
+        │  web libera cuando el usuario confirma haber iniciado sesión.
+        ▼
+practica7.ControladorSentimientos.ejecutar_paralelo()  ← Práctica 07 (hilos
+        │                                                  por fuente + cola
+        │                                                  productor/consumidor)
+        ▼
+webapp/storytelling.py  → interpretación narrativa basada en las cifras
+        ▼
+datos/sentimientos_<fecha>.json (con el storytelling embebido)
+        │  GET /api/job/{id} (progreso en vivo, polling)
+        │  GET /api/dataset  (resultado final)
+        ▼
+Dashboard (KPIs, distribución por red, storytelling, exploración de
+comentarios con filtros y explicabilidad del LLM)
+```
+
+### Cómo ejecutar la app web
+
+```bash
+# 1) Instalar dependencias (usa uv; crea/gestiona .venv en la raíz)
+uv sync
+
+# 2) Completa las claves de API en .env (copia .env.example como base):
+#    GROQ_API_KEY o OPENAI_API_KEY   -> clasificación de sentimientos
+#    YOUTUBE_API_KEY                 -> extracción de YouTube
+#    REDDIT_CLIENT_ID / SECRET       -> extracción de Reddit
+#    (Facebook/TikTok usan tu perfil real de Chrome, ver src/navegador.py)
+
+# 3) Levantar el servidor
+uv run python webapp/server.py
+
+# 4) Abrir http://localhost:8000 en el navegador
+```
+
+Desde la interfaz: escribe una consulta, elige las fuentes y el proveedor de
+LLM, y presiona "Iniciar extracción paralela". Si Facebook o TikTok necesitan
+login, se abre una ventana de Chrome — inicia sesión ahí y presiona el botón
+"Ya inicié sesión, continuar" en la web (el resto de hilos sigue trabajando
+mientras tanto, igual que en la Práctica 06). Al terminar, el dashboard se
+actualiza automáticamente con los nuevos resultados y el storytelling.
+
+---
+
+## Cómo ejecutar solo la extracción (Práctica 06, por CLI)
 
 Requiere **Python 3.9+**, **Google Chrome** y las dependencias del proyecto.
 
@@ -175,8 +252,9 @@ Requiere **Python 3.9+**, **Google Chrome** y las dependencias del proyecto.
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2) Clave de la API de YouTube en un archivo .env
+# 2) Claves de API en un archivo .env (ver .env.example)
 #    YOUTUBE_API_KEY=tu_clave
+#    REDDIT_CLIENT_ID=... / REDDIT_CLIENT_SECRET=...
 
 # 3) Ejecutar la extracción paralela
 python3 -m src.main       # solo extracción + consolidación

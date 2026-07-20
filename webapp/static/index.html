@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis Paralelo de Redes Sociales | Proyecto Final — Computación Paralela</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Background Glow Elements -->
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2a10 10 0 1 0 10 10H12V2z"></path>
+                        <path d="M12 12 2.8 2.8"></path>
+                        <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1>Análisis Paralelo de Redes Sociales</h1>
+                    <p class="subtitle">Proyecto Final — Computación Paralela (Extracción + NLP con LLMs)</p>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <div class="dataset-selector-wrapper" id="serverSelectorContainer" style="display: none;">
+                    <label for="datasetSelect">Dataset guardado:</label>
+                    <select id="datasetSelect" class="custom-select">
+                        <option value="">Cargando datasets...</option>
+                    </select>
+                </div>
+
+                <label class="btn btn-upload" for="fileInput">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>Cargar JSON local</span>
+                    <input type="file" id="fileInput" accept=".json" hidden>
+                </label>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Nueva búsqueda: dispara extracción concurrente + clasificación desde la web -->
+        <section class="search-panel glass-card" id="searchPanel">
+            <h3>Nueva búsqueda</h3>
+            <p class="text-secondary panel-hint">
+                Define un tema y la app extraerá opiniones en paralelo desde las 4 redes
+                seleccionadas, las clasificará por sentimiento y generará el storytelling.
+            </p>
+
+            <form id="searchForm" class="search-form">
+                <input type="text" id="consultaInput" class="search-form-input"
+                       placeholder="Ej. museo nacional del ecuador" required>
+
+                <div class="search-form-row">
+                    <div class="fuentes-checks" id="fuentesChecks">
+                        <label class="fuente-check"><input type="checkbox" value="Facebook" checked> Facebook</label>
+                        <label class="fuente-check"><input type="checkbox" value="TikTok" checked> TikTok</label>
+                        <label class="fuente-check"><input type="checkbox" value="YouTube" checked> YouTube</label>
+                        <label class="fuente-check"><input type="checkbox" value="Reddit" checked> Reddit</label>
+                    </div>
+
+                    <select id="proveedorSelect" class="custom-select small">
+                        <option value="groq">Groq (Llama, rápido/gratis)</option>
+                        <option value="openai">OpenAI (GPT, más preciso)</option>
+                    </select>
+
+                    <button type="submit" class="btn btn-primary" id="btnBuscar">
+                        Iniciar extracción paralela
+                    </button>
+                </div>
+            </form>
+
+            <!-- Progreso del job en curso -->
+            <div id="jobPanel" class="job-panel" style="display:none;">
+                <div class="job-header">
+                    <span class="job-estado-badge" id="jobEstadoBadge">en cola</span>
+                    <span id="jobConsultaLabel"></span>
+                </div>
+
+                <div id="loginPendienteBox" class="login-pendiente-box" style="display:none;">
+                    <p>Se abrió una ventana de Chrome para <strong id="loginFuenteNombre"></strong>.
+                       Inicia sesión ahí (si hace falta) y confirma aquí para continuar.</p>
+                    <button class="btn btn-secondary" id="btnConfirmarLogin">Ya inicié sesión, continuar</button>
+                </div>
+
+                <div class="job-log" id="jobLog"></div>
+            </div>
+        </section>
+
+        <!-- Problemática / Meta Info Card -->
+        <section class="meta-section id-card" id="metaCard">
+            <div class="meta-header">
+                <span class="badge badge-pulse">Caso de Estudio Activo</span>
+                <span class="meta-date" id="metaDate">Generado en: --</span>
+            </div>
+            <h2 id="metaProblematica">Aún no hay resultados: usa "Nueva búsqueda" o carga un JSON.</h2>
+            <div class="meta-stats-row">
+                <div class="meta-stat">
+                    <span class="stat-label">Total Analizado</span>
+                    <span class="stat-value" id="totalRecords">0</span>
+                </div>
+                <div class="meta-stat">
+                    <span class="stat-label">Fuentes Detectadas</span>
+                    <span class="stat-value" id="totalSources">0</span>
+                </div>
+                <div class="meta-stat">
+                    <span class="stat-label">Modelo LLM Predominante</span>
+                    <span class="stat-value" id="modelUsed">--</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- KPI Summary Grid -->
+        <section class="kpi-grid" id="kpiGrid">
+            <div class="kpi-card kpi-positivo" data-filter="positivo">
+                <div class="kpi-icon">😄</div>
+                <div class="kpi-info">
+                    <span class="kpi-title">Positivo</span>
+                    <div class="kpi-number" id="countPositivo">0</div>
+                    <div class="kpi-percent" id="pctPositivo">0%</div>
+                </div>
+            </div>
+            <div class="kpi-card kpi-negativo" data-filter="negativo">
+                <div class="kpi-icon">😡</div>
+                <div class="kpi-info">
+                    <span class="kpi-title">Negativo</span>
+                    <div class="kpi-number" id="countNegativo">0</div>
+                    <div class="kpi-percent" id="pctNegativo">0%</div>
+                </div>
+            </div>
+            <div class="kpi-card kpi-neutral" data-filter="neutral">
+                <div class="kpi-icon">😐</div>
+                <div class="kpi-info">
+                    <span class="kpi-title">Neutral</span>
+                    <div class="kpi-number" id="countNeutral">0</div>
+                    <div class="kpi-percent" id="pctNeutral">0%</div>
+                </div>
+            </div>
+            <div class="kpi-card kpi-mixto" data-filter="mixto">
+                <div class="kpi-icon">⚖️</div>
+                <div class="kpi-info">
+                    <span class="kpi-title">Mixto</span>
+                    <div class="kpi-number" id="countMixto">0</div>
+                    <div class="kpi-percent" id="pctMixto">0%</div>
+                </div>
+            </div>
+            <div class="kpi-card kpi-no-clasificable" data-filter="no_clasificable">
+                <div class="kpi-icon">❓</div>
+                <div class="kpi-info">
+                    <span class="kpi-title">No Clasificable</span>
+                    <div class="kpi-number" id="countNoClasificable">0</div>
+                    <div class="kpi-percent" id="pctNoClasificable">0%</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Platform Breakdown Bars -->
+        <section class="sources-section glass-card">
+            <h3>Distribución por Red Social / Fuente</h3>
+            <div class="sources-grid" id="sourcesGrid">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <!-- Storytelling / Interpretación cualitativa -->
+        <section class="storytelling-section glass-card" id="storytellingSection" style="display:none;">
+            <h3>Storytelling: interpretación de los resultados</h3>
+            <div id="storytellingNarrativa" class="storytelling-narrativa"></div>
+            <div id="storytellingHallazgos" class="storytelling-hallazgos"></div>
+        </section>
+
+        <!-- Filters and Controls -->
+        <section class="controls-section glass-card">
+            <div class="search-box">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" id="searchInput" placeholder="Buscar por palabra clave, texto o justificación...">
+            </div>
+
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label for="sourceFilter">Fuente:</label>
+                    <select id="sourceFilter" class="custom-select small">
+                        <option value="ALL">Todas las redes</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="sentimentFilter">Sentimiento:</label>
+                    <select id="sentimentFilter" class="custom-select small">
+                        <option value="ALL">Todos los sentimientos</option>
+                        <option value="positivo">Positivo</option>
+                        <option value="negativo">Negativo</option>
+                        <option value="neutral">Neutral</option>
+                        <option value="mixto">Mixto</option>
+                        <option value="no_clasificable">No Clasificable</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="sortFilter">Ordenar por:</label>
+                    <select id="sortFilter" class="custom-select small">
+                        <option value="relevance">Relevancia / Más reciente</option>
+                        <option value="likes">Más interacciones (Likes/Comentarios)</option>
+                        <option value="source">Red Social (A-Z)</option>
+                    </select>
+                </div>
+                <div class="view-toggle">
+                    <button class="btn-icon active" id="viewCardsBtn" title="Vista en Tarjetas">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z"></path></svg>
+                    </button>
+                    <button class="btn-icon" id="viewTableBtn" title="Vista en Tabla">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 4h18v4H3V4zm0 6h18v4H3v-4zm0 6h18v4H3v-4z"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Records Counter & Active Filters Display -->
+        <div class="results-header">
+            <span class="results-count">Mostrando <strong id="displayedCount">0</strong> de <span id="totalCount">0</span> registros</span>
+            <button class="btn-clear-filters" id="clearFiltersBtn" style="display: none;">Limpiar filtros</button>
+        </div>
+
+        <!-- Cards Container -->
+        <div id="recordsContainer" class="records-grid">
+            <!-- Cards rendered here -->
+        </div>
+
+        <!-- Table Container (Hidden by default) -->
+        <div id="tableContainer" class="table-wrapper glass-card" style="display: none;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Red Social</th>
+                        <th>Sentimiento</th>
+                        <th>Texto Original</th>
+                        <th>Justificación LLM</th>
+                        <th>Métricas</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Table rows rendered here -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer class="app-footer">
+        <p>Proyecto Final: Computación Paralela — Extracción, NLP y Storytelling en Redes Sociales | Universidad Politécnica Salesiana</p>
+    </footer>
+
+    <!-- Drop Zone Overlay when dragging files -->
+    <div class="drop-overlay" id="dropOverlay">
+        <div class="drop-box">
+            <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <h2>Suelta tu archivo sentimientos_*.json aquí</h2>
+            <p>El dashboard se actualizará instantáneamente con tus datos clasificados.</p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

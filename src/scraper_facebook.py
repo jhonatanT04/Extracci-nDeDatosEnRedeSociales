@@ -24,6 +24,7 @@ class ScraperFacebook:
         max_publicaciones=20,
         max_rondas_comentarios=5,
         archivo_salida="datos/facebook_publicaciones.json",
+        confirmar_login=None,
     ):
         self.busqueda = busqueda
         self.scrolls_feed = scrolls_feed
@@ -35,6 +36,10 @@ class ScraperFacebook:
         self.driver = None
         self.gestor = None
         self.publicaciones = []
+        # Callable sin argumentos que bloquea hasta confirmar el login. Por
+        # defecto usa input() en la terminal (CLI); la app web pasa uno que
+        # espera un threading.Event liberado desde el navegador.
+        self.confirmar_login = confirmar_login
 
     def _checkpoint(self):
         """Si otro hilo está iniciando sesión, se bloquea aquí hasta que
@@ -51,7 +56,10 @@ class ScraperFacebook:
     def iniciar_sesion(self):
         self.driver.get("https://www.facebook.com/")
 
-        input("Inicia sesión en Facebook y presiona ENTER para continuar... ")
+        if self.confirmar_login is not None:
+            self.confirmar_login()
+        else:
+            input("Inicia sesión en Facebook y presiona ENTER para continuar... ")
 
     # ------------------------------------------------------------------
     # Búsqueda y feed
