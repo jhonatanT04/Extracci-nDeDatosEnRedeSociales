@@ -4,7 +4,7 @@
 **Integrantes:** Justin Lucero, Jhonatan Tacuri, Wilmer Merchán
 
 Sistema que extrae **en paralelo** opiniones publicadas en **Facebook, TikTok,
-YouTube y Reddit** sobre el diseño ganador del nuevo Museo Nacional del
+YouTube y X (Twitter)** sobre el diseño ganador del nuevo Museo Nacional del
 Ecuador, las clasifica por sentimiento con un LLM (también en paralelo) y
 presenta los resultados —con exploración e interpretación narrativa
 (storytelling)— en una **aplicación web** de punta a punta.
@@ -39,16 +39,14 @@ identificar el sentimiento predominante y los principales temas de discusión.
 | **Facebook** | Los medios ecuatorianos publicaron la noticia y la ciudadanía opinó masivamente en los comentarios | Selenium sobre Chrome real (sesión iniciada por el usuario) |
 | **TikTok** | Contenido audiovisual y opinión de públicos jóvenes sobre la polémica | Selenium sobre Chrome real |
 | **YouTube** | Videos de noticias y análisis con debate extenso en los comentarios | API oficial (YouTube Data API v3) |
-| **Reddit** | Comunidades de arquitectura, urbanismo y foros ecuatorianos (r/Ecuador y similares) con debate textual extenso y votable | API oficial (OAuth "client_credentials", sin login de usuario) |
+| **X (Twitter)** | Epicentro del debate público inmediato; arquitectos y ciudadanos opinaron en tiempo real sobre el diseño | Selenium sobre Chrome real (sesión iniciada por el usuario) |
 
-Facebook y TikTok bloquean el scraping con librerías de terceros (imitan el
+Facebook, TikTok y X bloquean el scraping con librerías de terceros (imitan el
 tráfico y son detectadas fácilmente), por lo que se automatiza **Google Chrome
 real** con Selenium sobre una sesión que el usuario inicia manualmente: las
 peticiones salen de un navegador legítimo con cookies válidas y esquivan gran
-parte de la detección anti-bot. YouTube y Reddit sí ofrecen una **API oficial
-gratuita**, así que ahí no hace falta navegador ni login: basta una clave de
-API (Reddit usa una app tipo "script" con `client_id`/`client_secret`, sin
-necesidad de una cuenta de usuario logueada).
+parte de la detección anti-bot. YouTube sí ofrece una **API oficial gratuita**,
+así que ahí no hace falta navegador ni login: basta una clave de API.
 
 ---
 
@@ -65,6 +63,9 @@ qué criterio se localizó, para mantener la trazabilidad.
   por cada video, abre la pestaña de comentarios y los extrae.
 - **YouTube:** busca videos del tema con la API y descarga los hilos de
   comentarios (con respuestas anidadas) mediante paginación.
+- **X (Twitter):** abre la búsqueda en vivo (`/search?q=...&f=live`), recorre
+  los tweets de resultados y, por cada tweet, abre su hilo y extrae las
+  respuestas como comentarios.
 
 ---
 
@@ -82,8 +83,8 @@ qué criterio se localizó, para mantener la trazabilidad.
                  └──────┬───────────┬───────────┬───────────┬──┘
              (hilo 1)   │  (hilo 2) │  (hilo 3) │  (hilo 4) │
               ┌─────────▼──┐ ┌──────▼───┐ ┌─────▼─────┐ ┌───▼──────┐
-              │  Facebook  │ │  TikTok  │ │  YouTube  │ │  Reddit  │
-              │  Selenium  │ │ Selenium │ │  API v3   │ │   API    │
+              │  Facebook  │ │  TikTok  │ │  YouTube  │ │    X     │
+              │  Selenium  │ │ Selenium │ │  API v3   │ │ Selenium │
               └─────────┬──┘ └──────┬───┘ └─────┬─────┘ └───┬──────┘
                         │   (cada uno guarda su JSON)        │
                         └──────────────┬──────────────────────┘
@@ -106,7 +107,7 @@ src/
   scraper_facebook.py       # scraper Selenium de Facebook (publicaciones + comentarios)
   scraper_tiktok.py         # scraper Selenium de TikTok (videos + comentarios)
   scraper_youtube.py        # extractor de YouTube por API oficial
-  scraper_reddit.py         # extractor de Reddit por API oficial (OAuth client_credentials)
+  scraper_x.py              # scraper Selenium de X/Twitter (tweets + respuestas)
   consolidar.py             # une los JSON por fuente en un dataset unificado
 datos/                      # datasets generados (JSON por fuente + combinado)
 ```
@@ -115,7 +116,7 @@ datos/                      # datasets generados (JSON por fuente + combinado)
 
 ## Paralelismo: hilos y justificación
 
-La extracción de las tres fuentes se ejecuta **al mismo tiempo** en
+La extracción de las cuatro fuentes se ejecuta **al mismo tiempo** en
 [`src/controlador.py`](src/controlador.py) con un `ThreadPoolExecutor`: un hilo
 por fuente.
 
@@ -124,7 +125,7 @@ por fuente.
 o a la red (cargar páginas, hacer scroll, esperar respuestas de la API), no
 calculando. Con hilos, mientras una fuente espera, Python libera el GIL y otro
 hilo avanza: las esperas se **solapan** y el tiempo total tiende al de la fuente
-más lenta, no a la suma de las tres. Además, los hilos comparten memoria, lo que
+más lenta, no a la suma de las cuatro. Además, los hilos comparten memoria, lo que
 permite compartir el `GestorLogin` sin coste de serialización. Los procesos
 convendrían si el cuello de botella fuera la CPU, que no es el caso aquí.
 
@@ -157,7 +158,7 @@ un registro plano y trazable:
 
 | Campo | Descripción |
 |-------|-------------|
-| `fuente` | Red social de origen (Facebook / TikTok / YouTube / Reddit) |
+| `fuente` | Red social de origen (Facebook / TikTok / YouTube / X) |
 | `consulta` | Tema o criterio de búsqueda que originó el registro |
 | `texto` | Contenido textual (publicación o comentario) |
 | `autor`, `fecha_publicacion`, `url` | Metadatos |
@@ -173,7 +174,7 @@ Los registros se **deduplican** por `id_unico`.
 El campo `texto` es la materia prima del proyecto final de **análisis de
 sentimientos**: sobre esos textos se clasificará la polaridad (a favor / en
 contra / neutro). El campo `fuente` permite comparar el sentimiento entre
-Facebook, TikTok, YouTube y Reddit, y `metricas` permite ponderar por
+Facebook, TikTok, YouTube y X, y `metricas` permite ponderar por
 relevancia.
 
 ---
@@ -225,8 +226,7 @@ uv sync
 # 2) Completa las claves de API en .env (copia .env.example como base):
 #    GROQ_API_KEY o OPENAI_API_KEY   -> clasificación de sentimientos
 #    YOUTUBE_API_KEY                 -> extracción de YouTube
-#    REDDIT_CLIENT_ID / SECRET       -> extracción de Reddit
-#    (Facebook/TikTok usan tu perfil real de Chrome, ver src/navegador.py)
+#    (Facebook/TikTok/X usan tu perfil real de Chrome, ver src/navegador.py)
 
 # 3) Levantar el servidor
 uv run python webapp/server.py
@@ -254,7 +254,7 @@ pip install -r requirements.txt
 
 # 2) Claves de API en un archivo .env (ver .env.example)
 #    YOUTUBE_API_KEY=tu_clave
-#    REDDIT_CLIENT_ID=... / REDDIT_CLIENT_SECRET=...
+#    (Facebook/TikTok/X usan tu perfil real de Chrome, ver src/navegador.py)
 
 # 3) Ejecutar la extracción paralela
 python3 -m src.main       # solo extracción + consolidación

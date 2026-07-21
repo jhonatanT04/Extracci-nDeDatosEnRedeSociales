@@ -1,6 +1,6 @@
 """Controlador paralelo de la extracción.
 
-Ejecuta los scrapers de las cuatro fuentes (Facebook, TikTok, YouTube, Reddit)
+Ejecuta los scrapers de las cuatro fuentes (Facebook, TikTok, YouTube, X)
 en hilos concurrentes y, al terminar, consolida el dataset unificado.
 
 ¿Por qué HILOS y no procesos? El trabajo es I/O-bound: cada scraper pasa la
@@ -10,8 +10,8 @@ GestorLogin) sin coste de serialización entre procesos.
 
 Un GestorLogin compartido coordina los inicios de sesión manuales de los
 scrapers de Selenium: mientras uno pide login en la terminal, los demás hilos
-se bloquean para no competir por stdin. YouTube y Reddit usan API oficial
-(sin login), así que pasan por el checkpoint sin bloquear a nadie.
+se bloquean para no competir por stdin. YouTube usa API oficial (sin login),
+así que pasa por el checkpoint sin bloquear a nadie.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,8 +19,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.consolidar import consolidar
 from src.gestor_login import GestorLogin
 from src.scraper_facebook import ScraperFacebook
-from src.scraper_reddit import ScraperReddit
 from src.scraper_tiktok import ScraperTikTok
+from src.scraper_x import ScraperX
 from src.scraper_youtube import ScraperYouTube
 
 
@@ -49,7 +49,7 @@ def ejecutar_paralelo(scrapers=None, consolidar_al_final=True, on_evento=None):
     web para mostrar progreso en vivo sin acoplarse a los prints de CLI.
     """
     if scrapers is None:
-        scrapers = [ScraperFacebook(), ScraperTikTok(), ScraperYouTube(), ScraperReddit()]
+        scrapers = [ScraperFacebook(), ScraperTikTok(), ScraperYouTube(), ScraperX()]
     gestor = GestorLogin()
 
     print(f"Lanzando {len(scrapers)} extractores en paralelo (hilos)...\n")

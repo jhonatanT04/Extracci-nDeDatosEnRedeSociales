@@ -4,7 +4,7 @@ Aplicación web del Proyecto Final — Computación Paralela (UPS).
 
 Backend único que integra de punta a punta las prácticas 6 y 7: recibe una
 consulta de búsqueda desde el navegador, dispara la extracción concurrente
-de las 4 redes sociales (Facebook, TikTok, YouTube, Reddit) usando hilos,
+de las 4 redes sociales (Facebook, TikTok, YouTube, X) usando hilos,
 clasifica el sentimiento de cada opinión en paralelo con un LLM (Groq u
 OpenAI), genera una interpretación narrativa (storytelling) de los
 resultados y expone todo mediante una API HTTP + dashboard estático.
@@ -14,10 +14,9 @@ Uso:
     (o)  uvicorn webapp.server:app --reload
 
 Requiere las claves de API relevantes en el .env de la raíz (ver
-.env.example): GROQ_API_KEY u OPENAI_API_KEY, YOUTUBE_API_KEY,
-REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET. Facebook y TikTok usan el perfil
-real de Chrome del usuario (ver src/navegador.py); solo piden login manual
-la primera vez.
+.env.example): GROQ_API_KEY u OPENAI_API_KEY y YOUTUBE_API_KEY. Facebook,
+TikTok y X usan el perfil real de Chrome del usuario (ver src/navegador.py);
+solo piden login manual la primera vez.
 """
 
 from __future__ import annotations
@@ -30,14 +29,20 @@ import time
 import uuid
 from datetime import datetime
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIR_WEBAPP = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(DIR_WEBAPP)
 PRACTICA7_DIR = os.path.join(PROJECT_ROOT, "practica7")
 DIR_DATOS_RAIZ = os.path.join(PROJECT_ROOT, "datos")
 DIR_DATOS_P7 = os.path.join(PRACTICA7_DIR, "datos")
-DIR_STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+DIR_STATIC = os.path.join(DIR_WEBAPP, "static")
 
+# Se agregan al path la raíz (para importar src.*), practica7 (sentimientos) y
+# la propia carpeta webapp (para importar storytelling), de modo que el server
+# funcione tanto lanzado como script (python webapp/server.py) como en módulo
+# (python -m webapp.server) o vía uvicorn webapp.server:app.
 sys.path.insert(0, PROJECT_ROOT)
 sys.path.insert(0, PRACTICA7_DIR)
+sys.path.insert(0, DIR_WEBAPP)
 
 from dotenv import load_dotenv
 
@@ -50,14 +55,14 @@ from pydantic import BaseModel
 
 from src.controlador import ejecutar_paralelo
 from src.scraper_facebook import ScraperFacebook
-from src.scraper_reddit import ScraperReddit
+from src.scraper_x import ScraperX
 from src.scraper_tiktok import ScraperTikTok
 from src.scraper_youtube import ScraperYouTube
 
 from storytelling import generar_storytelling
 
-FUENTES_DISPONIBLES = ["Facebook", "TikTok", "YouTube", "Reddit"]
-FUENTES_CON_LOGIN_MANUAL = {"Facebook", "TikTok"}
+FUENTES_DISPONIBLES = ["Facebook", "TikTok", "YouTube", "X"]
+FUENTES_CON_LOGIN_MANUAL = {"Facebook", "TikTok", "X"}
 
 app = FastAPI(title="Análisis Paralelo de Redes Sociales — Proyecto Final")
 
@@ -126,8 +131,11 @@ def _construir_scrapers(job: dict) -> list:
         ))
     if "YouTube" in job["fuentes"]:
         scrapers.append(ScraperYouTube(busqueda=job["consulta"]))
-    if "Reddit" in job["fuentes"]:
-        scrapers.append(ScraperReddit(busqueda=job["consulta"]))
+    if "X" in job["fuentes"]:
+        scrapers.append(ScraperX(
+            busqueda=job["consulta"],
+            confirmar_login=_confirmar_login_callback(job, "X"),
+        ))
     return scrapers
 
 
@@ -262,10 +270,7 @@ def api_fuentes():
         "Facebook": {"tipo": "login_manual_chrome", "disponible": True},
         "TikTok": {"tipo": "login_manual_chrome", "disponible": True},
         "YouTube": {"tipo": "api_key", "disponible": bool(os.getenv("YOUTUBE_API_KEY"))},
-        "Reddit": {
-            "tipo": "api_key",
-            "disponible": bool(os.getenv("REDDIT_CLIENT_ID") and os.getenv("REDDIT_CLIENT_SECRET")),
-        },
+        "X": {"tipo": "login_manual_chrome", "disponible": True},
     }
 
 

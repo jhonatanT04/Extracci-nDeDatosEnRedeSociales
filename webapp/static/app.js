@@ -609,7 +609,7 @@ function getSourceIcon(fuente = '') {
     if (f.includes('facebook')) return '📘';
     if (f.includes('tiktok')) return '🎵';
     if (f.includes('youtube')) return '▶️';
-    if (f.includes('twitter') || f.includes('x-twitter')) return '🐦';
+    if (f === 'x' || f.includes('twitter')) return '𝕏';
     return '🌐';
 }
 
