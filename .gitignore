@@ -17,6 +17,9 @@ __pycache__/
 datos/sentimientos_*.json
 practica7/datos/sentimientos_*.json
 
+#pagina web
+paginaWebs
+
 # Artefactos de compilación LaTeX (artículo académico)
 article/*.aux
 article/*.bbl

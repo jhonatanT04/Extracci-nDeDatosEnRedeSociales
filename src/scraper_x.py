@@ -52,11 +52,12 @@ class ScraperX:
         self.driver = crear_navegador("x")
 
     def iniciar_sesion(self):
-        self.driver.get("https://x.com/home")
+        # No se navega a x.com automáticamente: solo se abre el navegador (con
+        # tu perfil) y se espera tu confirmación. La búsqueda navegará después.
         if self.confirmar_login is not None:
             self.confirmar_login()
         else:
-            input("Inicia sesión en X y presiona ENTER para continuar... ")
+            input("Abre X si hace falta y presiona ENTER para continuar... ")
 
     # ------------------------------------------------------------------
     # Búsqueda
@@ -179,22 +180,44 @@ class ScraperX:
                 pub["comentarios"] = []
             print(f"[{n}/{len(self.publicaciones)}] {len(pub['comentarios'])} respuestas")
 
+    def _limite_discover_more(self):
+        """Posición vertical (y) del encabezado 'Discover more' / 'Descubre
+        más' si existe. Debajo de esa línea, X muestra tweets relacionados
+        (sugerencias), NO respuestas al tweet: son el límite de los comentarios
+        reales. Devuelve None si aún no aparece."""
+        for h in self.driver.find_elements(
+            By.XPATH,
+            '//*[@role="heading"][.//span[contains(text(), "Discover more") '
+            'or contains(text(), "Descubre")]]',
+        ):
+            try:
+                return h.location["y"]
+            except Exception:  # noqa: BLE001
+                continue
+        return None
+
     def _extraer_respuestas(self, url_tweet):
-        """En la página de un tweet, los artículos posteriores al principal son
-        las respuestas. Se scrollea y deduplica por URL."""
+        """En la página de un tweet, los artículos son el tweet principal y sus
+        respuestas. Se descarta el principal, los duplicados y todo lo que esté
+        en la zona 'Discover more' (sugerencias, no comentarios). Se scrollea y
+        deduplica por URL."""
         respuestas = {}
         for _ in range(self.max_rondas_comentarios):
-            articulos = self.driver.find_elements(
+            limite_y = self._limite_discover_more()
+
+            for art in self.driver.find_elements(
                 By.CSS_SELECTOR, 'article[data-testid="tweet"]'
-            )
-            for art in articulos:
+            ):
                 try:
+                    # Todo lo que quede por debajo del encabezado "Discover
+                    # more" son tweets relacionados, no respuestas: se ignora.
+                    if limite_y is not None and art.location["y"] >= limite_y:
+                        continue
                     reg = self._tweet_a_registro(art)
                 except StaleElementReferenceException:
                     continue
                 if not reg or not reg["texto"]:
                     continue
-                # Descarta el tweet principal (mismo permalink) y duplicados.
                 if reg["url"] == url_tweet or reg["url"] in respuestas:
                     continue
                 respuestas[reg["url"]] = {
@@ -202,6 +225,12 @@ class ScraperX:
                     "texto": reg["texto"],
                     "likes": reg["metricas"].get("likes", 0),
                 }
+
+            # Si ya apareció "Discover more", se llegó al final de las
+            # respuestas reales: no tiene sentido seguir scrolleando.
+            if limite_y is not None:
+                break
+
             self.driver.execute_script("window.scrollBy(0, 2500);")
             sleep(2)
         return list(respuestas.values())
