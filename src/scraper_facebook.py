@@ -136,9 +136,26 @@ class ScraperFacebook:
         except Exception:
             print("  (no se pudo cambiar el filtro de comentarios, sigo con el actual)")
 
+    def _sin_comentarios(self):
+        """True si el diálogo muestra el panel de 'sugerencias de la IA' en vez
+        de comentarios reales: Facebook lo muestra cuando la publicación no
+        tiene comentarios, así que no hay nada que extraer."""
+        try:
+            return bool(self.driver.find_elements(
+                By.XPATH,
+                '//span[contains(text(), "sugerencia de la IA") '
+                'or contains(text(), "una sugerencia de la IA")]',
+            ))
+        except Exception:  # noqa: BLE001
+            return False
+
     def extraer_comentarios(self):
         """Scrollea dentro del diálogo hasta cargar todos los comentarios
         y devuelve [{autor, texto}, ...]."""
+        if self._sin_comentarios():
+            print("  (la publicación no tiene comentarios: solo sugerencias de IA)")
+            return []
+
         self.ordenar_por_todos_los_comentarios()
 
         xpath_comentario = '//div[@role="article" and starts-with(@aria-label, "Comentario de")]'
